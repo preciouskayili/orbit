@@ -20,8 +20,8 @@ export function MachineList({ machines }: { machines: Machine[] }) {
   const navigate = useNavigate();
 
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-panel">
-      <div className="grid grid-cols-[1fr_112px_82px_82px_100px] border-b border-line px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-700">
+    <div className="overflow-hidden rounded-xl bg-panel">
+      <div className="grid grid-cols-[1fr_112px_82px_82px_100px] bg-white/[0.025] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-700">
         <span>Machine</span>
         <span>Status</span>
         <span>CPU</span>
@@ -33,8 +33,8 @@ export function MachineList({ machines }: { machines: Machine[] }) {
           key={machine.id}
           onClick={() => navigate(`/projects/${machine.projectId}/machines/${machine.id}`)}
           className={cn(
-            "grid w-full grid-cols-[1fr_112px_82px_82px_100px] items-center px-3 py-3 text-left hover:bg-white/[0.025]",
-            index !== machines.length - 1 && "border-b border-line",
+            "grid w-full grid-cols-[1fr_112px_82px_82px_100px] items-center px-3 py-3 text-left hover:bg-white/[0.04]",
+            index % 2 === 1 && "bg-white/[0.015]",
           )}
         >
           <span className="flex min-w-0 items-center gap-3">

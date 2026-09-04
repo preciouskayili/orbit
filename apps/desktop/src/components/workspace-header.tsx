@@ -43,11 +43,11 @@ export function WorkspaceHeader({
   );
 
   return (
-    <header className="window-drag flex h-[54px] shrink-0 items-center border-b border-white/[0.06] bg-[#171717] px-3">
+    <header className="window-drag flex h-[54px] shrink-0 items-center bg-[#1a1a1a] px-3">
       {activeMachine && (
         <Badge
           variant="secondary"
-          className="ml-2 h-5 rounded-full border-0 bg-emerald-400/10 px-2 text-[10px] font-medium text-emerald-300"
+          className="ml-2 h-5 rounded-full bg-emerald-400/10 px-2 text-[10px] font-medium text-emerald-300"
         >
           {activeMachine.status}
         </Badge>
@@ -129,7 +129,7 @@ export function WorkspaceHeader({
           <DropdownMenuContent
             align="end"
             sideOffset={7}
-            className="w-52 border border-white/[0.08] bg-[#252628] p-1.5 text-zinc-200 shadow-2xl"
+            className="w-52 bg-[#292a2c] p-1.5 text-zinc-200 shadow-2xl"
           >
             <DropdownMenuItem className="px-2 py-2 text-[12px] focus:bg-white/[0.07] focus:text-white">
               Rename computer

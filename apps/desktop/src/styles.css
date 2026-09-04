@@ -83,9 +83,8 @@ button {
 }
 
 .agent-prose code {
-  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.055);
+  background: rgba(255, 255, 255, 0.07);
   padding: 1px 4px;
   color: #d0d0d0;
   font-family: "SFMono-Regular", Menlo, Monaco, monospace;

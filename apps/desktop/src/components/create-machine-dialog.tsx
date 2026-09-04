@@ -50,7 +50,7 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
         <Plus className="size-3" /> New computer
       </DialogTrigger>
       <DialogContent className="w-[520px] max-w-[calc(100vw-2rem)]" showCloseButton={false}>
-          <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
+          <DialogHeader className="bg-white/[0.025] px-5 py-4">
             <DialogTitle>Create a computer</DialogTitle>
             <DialogDescription>Add a persistent computer to this project.</DialogDescription>
             <DialogClose render={<Button variant="ghost" size="icon-sm" className="absolute right-3 top-3 text-zinc-500" />}><X className="size-4" /></DialogClose>
@@ -65,7 +65,7 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
                   onChange={(event) => setName(event.target.value)}
                   minLength={2}
                   required
-                  className="h-9 w-full rounded-md border border-white/[0.08] bg-black/20 px-3 text-[11px] text-zinc-200 outline-none placeholder:text-zinc-700 focus:border-[#ff714e]/40"
+                  className="h-9 w-full rounded-lg bg-black/20 px-3 text-[11px] text-zinc-200 outline-none transition-colors placeholder:text-zinc-700 focus:bg-black/30 focus:ring-1 focus:ring-[#ff714e]/30"
                 />
               </label>
 
@@ -81,8 +81,8 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
                         type="button"
                         onClick={() => setOS(item.value)}
                         className={cn(
-                          "relative flex items-center gap-2.5 rounded-lg border px-3 py-3 text-left",
-                          selected ? "border-[#ff714e]/40 bg-[#ff714e]/[0.07]" : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.04]",
+                          "relative flex items-center gap-2.5 rounded-lg px-3 py-3 text-left transition-colors",
+                          selected ? "bg-[#ff714e]/[0.1]" : "bg-white/[0.035] hover:bg-white/[0.06]",
                         )}
                       >
                         <Icon className={cn("size-4", selected ? "text-[#ff8c70]" : "text-zinc-600")} />
@@ -103,14 +103,14 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
                 <ResourceSelect label="Storage" value={storageGb} values={[40, 80, 120, 240]} suffix="GB" onChange={setStorageGb} />
               </div>
 
-              <div className="flex items-center gap-2 rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+              <div className="flex items-center gap-2 rounded-lg bg-white/[0.035] px-3 py-2.5">
                 <Server className="size-3.5 text-zinc-600" />
                 <p className="text-[11px] leading-5 text-zinc-600">Provisioning is mocked. This computer is added to the in-memory API and starts stopped.</p>
               </div>
               {createMachine.error && <p className="text-[10px] text-rose-300">{createMachine.error.message}</p>}
             </div>
 
-            <DialogFooter className="border-t border-white/[0.07] px-5 py-3.5">
+            <DialogFooter className="bg-white/[0.025] px-5 py-3.5">
               <DialogClose render={<Button variant="ghost" size="sm" />}>Cancel</DialogClose>
               <Button type="submit" size="sm" disabled={createMachine.isPending || name.trim().length < 2}>
                 {createMachine.isPending ? "Creating…" : "Create computer"}
@@ -126,7 +126,7 @@ function ResourceSelect({ label, value, values, suffix, onChange }: { label: str
   return (
     <label>
       <span className="mb-1.5 block text-[10px] font-medium text-zinc-400">{label}</span>
-      <select value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-9 w-full rounded-md border border-white/[0.08] bg-black/20 px-2.5 text-[10px] text-zinc-300 outline-none focus:border-[#ff714e]/40">
+      <select value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-9 w-full rounded-lg bg-black/20 px-2.5 text-[10px] text-zinc-300 outline-none transition-colors focus:bg-black/30 focus:ring-1 focus:ring-[#ff714e]/30">
         {values.map((option) => <option key={option} value={option}>{option} {suffix}</option>)}
       </select>
     </label>

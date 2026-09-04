@@ -14,7 +14,7 @@ export function LoadingState({ label = "Loading workspace" }: { label?: string }
 export function ErrorState({ error }: { error: Error }) {
   return (
     <div className="flex h-full items-center justify-center">
-      <div className="rounded-lg border border-rose-400/15 bg-rose-400/[0.035] px-4 py-3 text-[10px] text-rose-300">
+      <div className="rounded-lg bg-rose-400/[0.075] px-4 py-3 text-[10px] text-rose-300">
         <AlertCircle className="mr-2 inline size-3.5" /> {error.message}
       </div>
     </div>

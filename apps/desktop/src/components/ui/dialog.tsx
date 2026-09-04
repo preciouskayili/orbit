@@ -12,7 +12,7 @@ function DialogContent({ className, children, showCloseButton = true, ...props }
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm" />
       <DialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <DialogPrimitive.Popup className={cn("relative w-full max-w-lg rounded-2xl border border-white/[0.09] bg-[#202020] text-zinc-100 shadow-2xl outline-none", className)} {...props}>
+        <DialogPrimitive.Popup className={cn("relative w-full max-w-lg rounded-2xl bg-[#242424] text-zinc-100 shadow-[0_28px_90px_rgba(0,0,0,.55)] outline-none", className)} {...props}>
           {children}
           {showCloseButton && (
             <DialogPrimitive.Close render={<Button variant="ghost" size="icon-sm" className="absolute right-3 top-3 text-zinc-500" />}>

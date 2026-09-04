@@ -27,9 +27,9 @@ export function SettingsPage() {
             <h2 className="text-[14px] font-medium text-zinc-200">Application</h2>
             <p className="mt-1 text-[12px] text-zinc-600">Desktop behavior, notifications, and local development.</p>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-white/[0.075] bg-[#181818]">
-            {settings.map((setting, index) => (
-              <button key={setting.title} disabled className={`flex w-full items-center gap-4 px-4 py-4 text-left ${index !== settings.length - 1 ? "border-b border-white/[0.06]" : ""}`}>
+          <div className="space-y-1">
+            {settings.map((setting) => (
+              <button key={setting.title} disabled className="flex w-full items-center gap-4 rounded-xl bg-[#1c1c1c] px-4 py-4 text-left transition-colors hover:bg-[#222222]">
                 <span className="flex size-9 items-center justify-center rounded-xl bg-white/[0.04] text-zinc-500"><setting.icon className="size-4" /></span>
                 <span className="min-w-0 flex-1"><span className="block text-[13px] font-medium text-zinc-300">{setting.title}</span><span className="mt-1 block text-[11px] text-zinc-600">{setting.description}</span></span>
                 <span className="text-[11px] text-zinc-500">{setting.value}</span>
@@ -37,7 +37,7 @@ export function SettingsPage() {
             ))}
           </div>
 
-          <div className="mt-5 rounded-2xl border border-amber-400/10 bg-amber-400/[0.025] px-4 py-4">
+          <div className="mt-5 rounded-2xl bg-amber-400/[0.045] px-4 py-4">
             <p className="text-[12px] font-medium text-zinc-300">Foundation mode</p>
             <p className="mt-1 text-[11px] leading-5 text-zinc-600">Cloud providers, credentials, remote streaming, authentication, billing, and real agent execution are intentionally not configured.</p>
           </div>

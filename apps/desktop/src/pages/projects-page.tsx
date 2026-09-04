@@ -37,10 +37,10 @@ export function ProjectsPage() {
               <button
                 key={project.id}
                 onClick={() => navigate(`/projects/${project.id}`)}
-                className="group min-h-[180px] rounded-2xl border border-white/[0.075] bg-[#181818] p-5 text-left transition-colors hover:border-white/[0.14] hover:bg-[#1b1b1b]"
+                className="group min-h-[180px] rounded-2xl bg-[#1c1c1c] p-5 text-left transition-colors hover:bg-[#222222]"
               >
                 <div className="flex items-start justify-between">
-                  <span className="flex size-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.035] text-zinc-500 group-hover:text-[#db7657]">
+                  <span className="flex size-10 items-center justify-center rounded-xl bg-white/[0.05] text-zinc-500 group-hover:bg-white/[0.075] group-hover:text-[#db7657]">
                     <Boxes className="size-[18px]" />
                   </span>
                   <ArrowUpRight className="size-3.5 text-zinc-700 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-zinc-400" />
@@ -55,7 +55,7 @@ export function ProjectsPage() {
             ))}
           </div>
 
-          <div className="mt-5 border-t border-line pt-4">
+          <div className="mt-5 rounded-xl bg-white/[0.025] p-4">
             <p className="text-[11px] leading-5 text-zinc-600">Projects are the durable boundary for computers, agent context, files, and activity.</p>
           </div>
         </div>

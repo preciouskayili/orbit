@@ -49,7 +49,7 @@ export function AgentPanel({ projectId, width, collapsed, onToggle }: AgentPanel
 
   if (collapsed) {
     return (
-      <aside className="flex w-12 shrink-0 flex-col items-center border-r border-white/[0.07] bg-[#171717]">
+      <aside className="flex w-12 shrink-0 flex-col items-center bg-[#181818]">
         <Tooltip>
           <TooltipTrigger onClick={onToggle} className="mt-3 flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"><ChevronRight className="size-4" /></TooltipTrigger>
           <TooltipContent side="right" className="bg-zinc-100 text-zinc-900">Show conversation</TooltipContent>
@@ -77,13 +77,13 @@ export function AgentPanel({ projectId, width, collapsed, onToggle }: AgentPanel
   };
 
   return (
-    <aside style={{ width }} className="relative flex shrink-0 flex-col border-r border-white/[0.075] bg-[#171717]">
-      <header className="window-drag flex h-[54px] shrink-0 items-center border-b border-white/[0.06] px-4">
+    <aside style={{ width }} className="relative flex shrink-0 flex-col bg-[#181818]">
+      <header className="window-drag flex h-[54px] shrink-0 items-center bg-[#1a1a1a] px-4">
         <TerminalSquare className="size-[17px] text-[#db7657]" />
         <div className="ml-2 min-w-0">
           <p className="truncate text-[14px] font-medium tracking-[-0.01em] text-zinc-200">Release verification</p>
         </div>
-        <Badge variant="secondary" className="ml-2 h-5 rounded-full border-0 bg-emerald-400/10 px-2 text-[10px] font-medium text-emerald-300">Running</Badge>
+        <Badge variant="secondary" className="ml-2 h-5 rounded-full bg-emerald-400/10 px-2 text-[10px] font-medium text-emerald-300">Running</Badge>
         <div className="ml-auto flex items-center gap-0.5">
           <Button variant="ghost" size="icon-sm" className="text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"><MoreHorizontal className="size-4" /></Button>
           <Tooltip>
@@ -104,13 +104,13 @@ export function AgentPanel({ projectId, width, collapsed, onToggle }: AgentPanel
           <div className="mb-4 flex items-center gap-2.5">
             <span className="flex size-7 items-center justify-center rounded-lg bg-[#e8e8e8] text-[#282828]"><Sparkles className="size-3.5" /></span>
             <span className="text-[13px] font-medium text-zinc-200">Orbit Agent</span>
-            <Badge variant="secondary" className="h-5 rounded-full border-0 bg-white/[0.065] px-2 text-[10px] font-normal text-zinc-400">Fleet agent</Badge>
+            <Badge variant="secondary" className="h-5 rounded-full bg-white/[0.065] px-2 text-[10px] font-normal text-zinc-400">Fleet agent</Badge>
           </div>
 
           <p>I split the release across three persistent computers so the checks can run in parallel.</p>
 
-          <div className="my-5 overflow-hidden rounded-xl border border-white/[0.075] bg-[#141414]">
-            <div className="flex items-center border-b border-white/[0.06] px-3.5 py-2.5">
+          <div className="my-5 overflow-hidden rounded-xl bg-white/[0.035]">
+            <div className="flex items-center bg-white/[0.025] px-3.5 py-2.5">
               <span className="agent-pulse size-1.5 rounded-full bg-[#db7657]" />
               <span className="ml-2 text-[11px] font-medium text-zinc-300">Fleet run</span>
               <span className="ml-auto text-[10px] text-zinc-600">3 computers</span>
@@ -139,7 +139,7 @@ export function AgentPanel({ projectId, width, collapsed, onToggle }: AgentPanel
       </div>
 
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#171717] via-[#171717] to-transparent px-5 pb-3 pt-10">
-        <form onSubmit={submit} className="rounded-2xl border border-white/[0.1] bg-[#252525] p-3 shadow-[0_18px_48px_rgba(0,0,0,.4)] transition-colors focus-within:border-white/[0.18]">
+        <form onSubmit={submit} className="rounded-2xl bg-[#262626] p-3 shadow-[0_18px_48px_rgba(0,0,0,.4)] transition-colors focus-within:bg-[#2a2a2a]">
           <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -156,7 +156,7 @@ export function AgentPanel({ projectId, width, collapsed, onToggle }: AgentPanel
             <Button type="button" variant="ghost" size="icon-xs" className="text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"><Plus className="size-4" /></Button>
             <DropdownMenu>
               <DropdownMenuTrigger className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] text-zinc-400 hover:bg-white/[0.055] hover:text-zinc-200"><Bot className="size-3.5" /> Fleet agent <ChevronDown className="size-3" /></DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" className="w-44 border border-white/[0.08] bg-[#252628] p-1.5 text-zinc-200"><DropdownMenuItem className="px-2 py-2 text-[12px] focus:bg-white/[0.07] focus:text-white">Fleet agent</DropdownMenuItem><DropdownMenuItem className="px-2 py-2 text-[12px] focus:bg-white/[0.07] focus:text-white">Personal agent</DropdownMenuItem></DropdownMenuContent>
+              <DropdownMenuContent side="top" align="start" className="w-44 bg-[#292a2c] p-1.5 text-zinc-200"><DropdownMenuItem className="px-2 py-2 text-[12px] focus:bg-white/[0.07] focus:text-white">Fleet agent</DropdownMenuItem><DropdownMenuItem className="px-2 py-2 text-[12px] focus:bg-white/[0.07] focus:text-white">Personal agent</DropdownMenuItem></DropdownMenuContent>
             </DropdownMenu>
             <button type="button" className="flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] text-zinc-500 hover:bg-white/[0.055] hover:text-zinc-200"><Sparkles className="size-3.5 text-[#db7657]" /> Orbit 1 <ChevronDown className="size-3" /></button>
             <Button type="button" variant="ghost" size="icon-xs" className="ml-auto text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"><Mic className="size-4" /></Button>

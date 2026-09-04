@@ -66,9 +66,11 @@ export function AppShell() {
               onPointerUp={(event) => {
                 dragStart.current = null;
                 event.currentTarget.releasePointerCapture(event.pointerId);
+                event.currentTarget.blur();
               }}
-              onPointerCancel={() => {
+              onPointerCancel={(event) => {
                 dragStart.current = null;
+                event.currentTarget.blur();
               }}
               onKeyDown={(event) => {
                 if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
@@ -84,7 +86,7 @@ export function AppShell() {
               }}
               className="group relative z-20 -mx-[3px] w-[7px] shrink-0 cursor-col-resize touch-none outline-none"
             >
-              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors duration-150 group-hover:bg-[#dd583b] group-focus:bg-[#dd583b] group-active:bg-[#dd583b]" />
+              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors duration-150 group-hover:bg-[#dd583b] group-active:bg-[#dd583b] group-focus-visible:bg-[#dd583b]" />
             </div>
           )}
 

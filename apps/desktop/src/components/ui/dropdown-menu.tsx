@@ -13,7 +13,7 @@ function DropdownMenuContent({ align = "start", side = "bottom", sideOffset = 6,
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner align={align} side={side} sideOffset={sideOffset} className="z-50 outline-none">
-        <MenuPrimitive.Popup className={cn("min-w-40 rounded-xl border border-white/[0.08] bg-[#252628] p-1.5 text-zinc-200 shadow-2xl outline-none", className)} {...props} />
+        <MenuPrimitive.Popup className={cn("min-w-40 rounded-xl bg-[#292a2c] p-1.5 text-zinc-200 shadow-[0_18px_50px_rgba(0,0,0,.45)] outline-none", className)} {...props} />
       </MenuPrimitive.Positioner>
     </MenuPrimitive.Portal>
   );

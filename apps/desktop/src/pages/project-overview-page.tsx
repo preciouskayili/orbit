@@ -53,7 +53,7 @@ export function ProjectOverviewPage() {
         <div className="mt-6"><SectionLabel label="Workspace docs" count={workspaceDocs.length} /></div>
         <div className="grid grid-cols-3 gap-3">
           {workspaceDocs.map((doc) => (
-            <button key={doc.title} className="overflow-hidden rounded-2xl border border-white/[0.075] bg-[#181818] text-left transition-colors hover:border-white/[0.14] hover:bg-[#1b1b1b]">
+            <button key={doc.title} className="overflow-hidden rounded-2xl bg-[#1c1c1c] text-left transition-colors hover:bg-[#222222]">
               <div className="h-[168px] bg-[#2a211e] p-4 text-[11px] leading-[1.55] text-[#c1ada6]">
                 <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-[#90776e]">{doc.eyebrow}</p>
                 <p className="mt-3">{doc.body}</p>
@@ -65,14 +65,14 @@ export function ProjectOverviewPage() {
         </div>
 
         <div className="mt-7"><SectionLabel label="Data" count={1} /></div>
-        <div className="w-[58%] min-w-[420px] overflow-hidden rounded-2xl border border-white/[0.075] bg-[#181818]">
+        <div className="w-[58%] min-w-[420px] overflow-hidden rounded-2xl bg-[#1c1c1c]">
           <div className="bg-[#13251f] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-300/70">Fleet status</div>
           <div className="grid grid-cols-[1fr_90px_100px] bg-[#173028] px-4 py-2 text-[9px] font-semibold uppercase text-emerald-200/60"><span>Computer</span><span>State</span><span>Agent</span></div>
-          {machines.map((machine) => <div key={machine.id} className="grid grid-cols-[1fr_90px_100px] border-t border-white/[0.045] px-4 py-2.5 text-[11px] text-zinc-500"><span>{machine.name}</span><span className="flex items-center gap-1.5"><span className={`size-1.5 rounded-full ${machine.status === "running" ? "bg-emerald-400" : "bg-zinc-600"}`} />{machine.status}</span><span>{machine.status === "running" ? "Attached" : "—"}</span></div>)}
+          {machines.map((machine, index) => <div key={machine.id} className={`grid grid-cols-[1fr_90px_100px] px-4 py-2.5 text-[11px] text-zinc-500 ${index % 2 ? "bg-white/[0.018]" : ""}`}><span>{machine.name}</span><span className="flex items-center gap-1.5"><span className={`size-1.5 rounded-full ${machine.status === "running" ? "bg-emerald-400" : "bg-zinc-600"}`} />{machine.status}</span><span>{machine.status === "running" ? "Attached" : "—"}</span></div>)}
         </div>
       </div>
 
-      <div className="absolute bottom-[15px] left-1/2 flex h-9 -translate-x-1/2 items-center gap-1 rounded-xl border border-white/[0.09] bg-[#1b1b1b]/95 px-1.5 text-[10px] text-zinc-500 shadow-[0_8px_28px_rgba(0,0,0,.38)] backdrop-blur-xl">
+      <div className="absolute bottom-[15px] left-1/2 flex h-9 -translate-x-1/2 items-center gap-1 rounded-xl bg-[#242424]/95 px-1.5 text-[10px] text-zinc-500 shadow-[0_8px_28px_rgba(0,0,0,.38)] backdrop-blur-xl">
         <button className="rounded-md bg-white/[0.075] px-2 py-1 font-semibold text-[#df6247]">All</button>
         <button className="rounded-md px-2 py-1">Computers <span className="rounded-full bg-white/[0.08] px-1">{machines.length}</span></button>
         <button className="rounded-md px-2 py-1">Docs <span className="rounded-full bg-white/[0.08] px-1">{workspaceDocs.length}</span></button>
@@ -90,7 +90,7 @@ function SectionLabel({ label, count }: { label: string; count: number }) {
 
 function ComputerCard({ machine, index, onOpen }: { machine: Machine; index: number; onOpen: () => void }) {
   return (
-    <button onClick={onOpen} className="overflow-hidden rounded-2xl border border-white/[0.075] bg-[#181818] text-left transition-colors hover:border-white/[0.14] hover:bg-[#1b1b1b]">
+    <button onClick={onOpen} className="overflow-hidden rounded-2xl bg-[#1c1c1c] text-left transition-colors hover:bg-[#222222]">
       <div className="h-[168px] bg-[#2a211e] p-4 text-[11px] text-[#c1ada6]">
         <div className="flex items-center gap-1.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#90776e]">
           {machine.os === "ubuntu" ? <Terminal className="size-3.5" /> : <Monitor className="size-3.5" />} {machine.osLabel} · {machine.cpu} CPU · {machine.ramGb} GB
@@ -98,7 +98,7 @@ function ComputerCard({ machine, index, onOpen }: { machine: Machine; index: num
         {index === 0 ? (
           <div className="mt-5 font-mono leading-[1.8]"><p className="text-[#dcc1b7]">$ pnpm test --run</p><p><Check className="mr-1 inline size-3 text-emerald-500" />51 tests passed</p><p><Check className="mr-1 inline size-3 text-emerald-500" />typecheck passed</p><p className="mt-2 text-[#806b63]">Agent is waiting for the next command.</p></div>
         ) : index === 1 ? (
-          <div className="mt-4 space-y-2"><p className="border-b border-[#5b443b] pb-1.5">Browser review checklist</p><p><Check className="mr-1 inline size-2.5 text-emerald-500" /> Sign in flow</p><p><Circle className="mr-1 inline size-2.5 text-[#d86a4c]" /> Approve test refund</p></div>
+          <div className="mt-4 space-y-2"><p className="rounded-md bg-black/10 px-2 py-1.5">Browser review checklist</p><p><Check className="mr-1 inline size-2.5 text-emerald-500" /> Sign in flow</p><p><Circle className="mr-1 inline size-2.5 text-[#d86a4c]" /> Approve test refund</p></div>
         ) : (
           <div className="mt-4 font-mono leading-[1.7]"><p>Building universal artifact…</p><p className="mt-2">trace-desktop-arm64.dmg</p><p className="text-[#80685f]">Waiting for signing credentials</p></div>
         )}
