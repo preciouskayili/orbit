@@ -60,6 +60,23 @@ button {
   background: transparent;
 }
 
+/* Keep the scroll track on the outer edge; account for its reserved 7px gutter
+   inside the content so row edges align with the navigation and footer. */
+.sidebar-scroll {
+  scrollbar-gutter: stable;
+}
+
+.sidebar-scroll-content {
+  padding-left: 16px;
+  padding-right: 9px;
+}
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+
 @keyframes pulse-dot {
   0%, 100% { opacity: 0.42; }
   50% { opacity: 1; }
