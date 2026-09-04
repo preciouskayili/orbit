@@ -38,7 +38,7 @@ export function AppShell() {
       <Sidebar projectId={projectId} />
 
       <div className="h-full w-full p-3 overflow-hidden flex-1">
-        <div className="flex min-w-0 flex-1 overflow-hidden h-full rounded-2xl border border-white/[0.08] bg-[#151515] shadow-[0_18px_50px_rgba(0,0,0,.24)]">
+        <div className="flex min-w-0 flex-1 overflow-hidden h-full rounded-2xl shadow-[0_18px_50px_rgba(0,0,0,.24)]">
           <AgentPanel
             projectId={projectId}
             width={conversationWidth}

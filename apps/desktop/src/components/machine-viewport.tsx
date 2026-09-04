@@ -1,24 +1,24 @@
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowClockwise as RefreshCw,
+  ArrowsClockwise as RotateCw,
+  CaretDown as ChevronDown,
   Check,
-  ChevronDown,
   Circle,
-  CircleUserRound,
-  Code2,
+  UserCircle as CircleUserRound,
+  Code as Code2,
+  Cursor as MousePointer2,
   FileText,
-  Globe2,
-  LayoutDashboard,
+  Globe as Globe2,
+  Gauge as LayoutDashboard,
+  Gear as Settings,
   Lock,
-  MousePointer2,
-  PackageCheck,
-  RefreshCw,
-  RotateCw,
-  Search,
-  Settings,
-  ShieldCheck,
+  MagnifyingGlass as Search,
+  Package as PackageCheck,
+  ShieldCheckered as ShieldCheck,
   Terminal,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import type { Machine } from "@orbit/shared";
 
 const checks = [

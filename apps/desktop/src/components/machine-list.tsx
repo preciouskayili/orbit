@@ -1,4 +1,11 @@
-import { Apple, Cpu, HardDrive, MemoryStick, Monitor, Terminal } from "lucide-react";
+import {
+  AppleLogo as Apple,
+  Cpu,
+  HardDrive,
+  Memory as MemoryStick,
+  Monitor,
+  Terminal,
+} from "@/components/ui/icons";
 import type { Machine } from "@orbit/shared";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";

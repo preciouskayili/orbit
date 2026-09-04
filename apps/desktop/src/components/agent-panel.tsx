@@ -1,20 +1,20 @@
 import { useMemo, useState, type FormEvent } from "react";
 import {
   ArrowUp,
-  Bot,
+  Robot as Bot,
   Check,
-  ChevronDown,
-  ChevronRight,
+  CaretDown as ChevronDown,
+  CaretRight as ChevronRight,
   Circle,
   Folder,
   Laptop,
-  Mic,
-  MoreHorizontal,
-  PanelLeftClose,
+  Microphone as Mic,
+  DotsThree as MoreHorizontal,
+  SidebarSimple as PanelLeftClose,
   Plus,
-  Sparkles,
-  TerminalSquare,
-} from "lucide-react";
+  Sparkle as Sparkles,
+  TerminalWindow as TerminalSquare,
+} from "@/components/ui/icons";
 import type { AgentMessage } from "@orbit/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

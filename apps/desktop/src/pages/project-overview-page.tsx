@@ -1,4 +1,4 @@
-import { Check, Circle, Monitor, Terminal } from "lucide-react";
+import { Check, Circle, Monitor, Terminal } from "@/components/ui/icons";
 import type { Machine } from "@orbit/shared";
 import { useNavigate, useParams } from "react-router-dom";
 import { WorkspaceHeader } from "@/components/workspace-header";
@@ -42,7 +42,7 @@ export function ProjectOverviewPage() {
     <div className="relative flex h-full flex-col bg-[#171818]">
       <WorkspaceHeader projectId={projectId} machines={machines} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-14 pt-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-20 pt-5">
         <SectionLabel label="Computers" count={machines.length} />
         <div className="grid grid-cols-3 gap-3">
           {machines.map((machine, index) => (
@@ -53,26 +53,26 @@ export function ProjectOverviewPage() {
         <div className="mt-6"><SectionLabel label="Workspace docs" count={workspaceDocs.length} /></div>
         <div className="grid grid-cols-3 gap-3">
           {workspaceDocs.map((doc) => (
-            <button key={doc.title} className="overflow-hidden rounded-xl border border-white/[0.075] bg-[#161717] text-left transition-colors hover:border-white/[0.13]">
-              <div className="h-[142px] bg-[#2b1e19] p-3 text-[7px] leading-[1.55] text-[#b6a29a]">
-                <p className="text-[6px] uppercase tracking-[0.08em] text-[#8f756b]">{doc.eyebrow}</p>
+            <button key={doc.title} className="overflow-hidden rounded-2xl border border-white/[0.075] bg-[#181818] text-left transition-colors hover:border-white/[0.14] hover:bg-[#1b1b1b]">
+              <div className="h-[168px] bg-[#2a211e] p-4 text-[11px] leading-[1.55] text-[#c1ada6]">
+                <p className="text-[9px] font-medium uppercase tracking-[0.08em] text-[#90776e]">{doc.eyebrow}</p>
                 <p className="mt-3">{doc.body}</p>
                 <p className="mt-3 text-[#7f6d66]">Everything remains attached to the project so another agent can continue without repeating setup.</p>
               </div>
-              <div className="px-3 py-2.5"><p className="text-[10px] font-semibold text-zinc-300">{doc.title}</p><p className="mt-1 text-[8px] text-zinc-600">{doc.meta}</p></div>
+              <div className="px-4 py-3"><p className="text-[13px] font-medium text-zinc-200">{doc.title}</p><p className="mt-1 text-[10px] text-zinc-600">{doc.meta}</p></div>
             </button>
           ))}
         </div>
 
         <div className="mt-7"><SectionLabel label="Data" count={1} /></div>
-        <div className="w-[47%] min-w-[340px] overflow-hidden rounded-xl border border-white/[0.075] bg-[#151616]">
-          <div className="bg-[#102720] px-3 py-2 text-[7px] font-semibold uppercase tracking-[0.08em] text-emerald-300/70">Fleet status</div>
-          <div className="grid grid-cols-[1fr_80px_90px] bg-[#163128] px-3 py-1.5 text-[6px] font-semibold uppercase text-emerald-200/60"><span>Computer</span><span>State</span><span>Agent</span></div>
-          {machines.map((machine) => <div key={machine.id} className="grid grid-cols-[1fr_80px_90px] border-t border-white/[0.045] px-3 py-1.5 text-[7px] text-zinc-500"><span>{machine.name}</span><span className="flex items-center gap-1"><span className={`size-1.5 rounded-full ${machine.status === "running" ? "bg-emerald-400" : "bg-zinc-600"}`} />{machine.status}</span><span>{machine.status === "running" ? "Attached" : "—"}</span></div>)}
+        <div className="w-[58%] min-w-[420px] overflow-hidden rounded-2xl border border-white/[0.075] bg-[#181818]">
+          <div className="bg-[#13251f] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-300/70">Fleet status</div>
+          <div className="grid grid-cols-[1fr_90px_100px] bg-[#173028] px-4 py-2 text-[9px] font-semibold uppercase text-emerald-200/60"><span>Computer</span><span>State</span><span>Agent</span></div>
+          {machines.map((machine) => <div key={machine.id} className="grid grid-cols-[1fr_90px_100px] border-t border-white/[0.045] px-4 py-2.5 text-[11px] text-zinc-500"><span>{machine.name}</span><span className="flex items-center gap-1.5"><span className={`size-1.5 rounded-full ${machine.status === "running" ? "bg-emerald-400" : "bg-zinc-600"}`} />{machine.status}</span><span>{machine.status === "running" ? "Attached" : "—"}</span></div>)}
         </div>
       </div>
 
-      <div className="absolute bottom-[15px] left-1/2 flex h-8 -translate-x-1/2 items-center gap-1 rounded-xl border border-white/[0.09] bg-[#171818] px-2 text-[8px] text-zinc-500 shadow-[0_8px_28px_rgba(0,0,0,.38)]">
+      <div className="absolute bottom-[15px] left-1/2 flex h-9 -translate-x-1/2 items-center gap-1 rounded-xl border border-white/[0.09] bg-[#1b1b1b]/95 px-1.5 text-[10px] text-zinc-500 shadow-[0_8px_28px_rgba(0,0,0,.38)] backdrop-blur-xl">
         <button className="rounded-md bg-white/[0.075] px-2 py-1 font-semibold text-[#df6247]">All</button>
         <button className="rounded-md px-2 py-1">Computers <span className="rounded-full bg-white/[0.08] px-1">{machines.length}</span></button>
         <button className="rounded-md px-2 py-1">Docs <span className="rounded-full bg-white/[0.08] px-1">{workspaceDocs.length}</span></button>
@@ -85,25 +85,25 @@ export function ProjectOverviewPage() {
 }
 
 function SectionLabel({ label, count }: { label: string; count: number }) {
-  return <p className="mb-3 text-[8px] font-semibold uppercase tracking-[0.12em] text-zinc-600">{label} <span className="ml-1 text-zinc-700">{count}</span></p>;
+  return <p className="mb-3 text-[11px] font-medium text-zinc-500">{label} <span className="ml-1 text-zinc-700">{count}</span></p>;
 }
 
 function ComputerCard({ machine, index, onOpen }: { machine: Machine; index: number; onOpen: () => void }) {
   return (
-    <button onClick={onOpen} className="overflow-hidden rounded-xl border border-white/[0.075] bg-[#161717] text-left transition-colors hover:border-white/[0.13]">
-      <div className="h-[142px] bg-[#2b1e19] p-3 text-[7px] text-[#b6a29a]">
-        <div className="flex items-center gap-1.5 text-[6px] uppercase tracking-[0.08em] text-[#8f756b]">
-          {machine.os === "ubuntu" ? <Terminal className="size-2.5" /> : <Monitor className="size-2.5" />} {machine.osLabel} · {machine.cpu} CPU · {machine.ramGb} GB
+    <button onClick={onOpen} className="overflow-hidden rounded-2xl border border-white/[0.075] bg-[#181818] text-left transition-colors hover:border-white/[0.14] hover:bg-[#1b1b1b]">
+      <div className="h-[168px] bg-[#2a211e] p-4 text-[11px] text-[#c1ada6]">
+        <div className="flex items-center gap-1.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#90776e]">
+          {machine.os === "ubuntu" ? <Terminal className="size-3.5" /> : <Monitor className="size-3.5" />} {machine.osLabel} · {machine.cpu} CPU · {machine.ramGb} GB
         </div>
         {index === 0 ? (
-          <div className="mt-4 font-mono leading-[1.7]"><p className="text-[#d7b5a8]">$ pnpm test --run</p><p><Check className="mr-1 inline size-2.5 text-emerald-500" />51 tests passed</p><p><Check className="mr-1 inline size-2.5 text-emerald-500" />typecheck passed</p><p className="mt-2 text-[#765e55]">Agent is waiting for the next command.</p></div>
+          <div className="mt-5 font-mono leading-[1.8]"><p className="text-[#dcc1b7]">$ pnpm test --run</p><p><Check className="mr-1 inline size-3 text-emerald-500" />51 tests passed</p><p><Check className="mr-1 inline size-3 text-emerald-500" />typecheck passed</p><p className="mt-2 text-[#806b63]">Agent is waiting for the next command.</p></div>
         ) : index === 1 ? (
           <div className="mt-4 space-y-2"><p className="border-b border-[#5b443b] pb-1.5">Browser review checklist</p><p><Check className="mr-1 inline size-2.5 text-emerald-500" /> Sign in flow</p><p><Circle className="mr-1 inline size-2.5 text-[#d86a4c]" /> Approve test refund</p></div>
         ) : (
           <div className="mt-4 font-mono leading-[1.7]"><p>Building universal artifact…</p><p className="mt-2">trace-desktop-arm64.dmg</p><p className="text-[#80685f]">Waiting for signing credentials</p></div>
         )}
       </div>
-      <div className="flex items-end px-3 py-2.5"><span><span className="block text-[10px] font-semibold text-zinc-300">{machine.name}</span><span className="mt-1 block text-[8px] text-zinc-600">{machine.osLabel} · {machine.status}</span></span><span className={`ml-auto size-1.5 rounded-full ${machine.status === "running" ? "bg-emerald-400" : "bg-zinc-600"}`} /></div>
+      <div className="flex items-end px-4 py-3"><span><span className="block text-[13px] font-medium text-zinc-200">{machine.name}</span><span className="mt-1 block text-[10px] text-zinc-600">{machine.osLabel} · {machine.status}</span></span><span className={`ml-auto size-2 rounded-full ${machine.status === "running" ? "bg-emerald-400" : "bg-zinc-600"}`} /></div>
     </button>
   );
 }

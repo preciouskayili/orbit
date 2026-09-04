@@ -1,5 +1,13 @@
 import { useState, type FormEvent } from "react";
-import { Apple, Check, Monitor, Plus, Server, Terminal, X } from "lucide-react";
+import {
+  AppleLogo as Apple,
+  Check,
+  HardDrives as Server,
+  Monitor,
+  Plus,
+  Terminal,
+  X,
+} from "@/components/ui/icons";
 import type { MachineOS } from "@orbit/shared";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +31,7 @@ const operatingSystems: Array<{ value: MachineOS; label: string; detail: string;
 
 export function CreateMachineDialog({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("Development Machine");
+  const [name, setName] = useState("Development Computer");
   const [os, setOS] = useState<MachineOS>("ubuntu");
   const [cpu, setCPU] = useState(4);
   const [ramGb, setRamGb] = useState(8);
@@ -39,7 +47,7 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button size="sm" />}>
-        <Plus className="size-3" /> Create machine
+        <Plus className="size-3" /> New computer
       </DialogTrigger>
       <DialogContent className="w-[520px] max-w-[calc(100vw-2rem)]" showCloseButton={false}>
           <DialogHeader className="border-b border-white/[0.07] px-5 py-4">
@@ -51,7 +59,7 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
           <form onSubmit={submit}>
             <div className="space-y-5 px-5 py-5">
               <label className="block">
-                <span className="mb-1.5 block text-[10px] font-medium text-zinc-400">Machine name</span>
+                <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">Computer name</span>
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -97,7 +105,7 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
 
               <div className="flex items-center gap-2 rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
                 <Server className="size-3.5 text-zinc-600" />
-                <p className="text-[9px] leading-4 text-zinc-600">Provisioning is mocked. This machine will be added to in-memory API data and starts stopped.</p>
+                <p className="text-[11px] leading-5 text-zinc-600">Provisioning is mocked. This computer is added to the in-memory API and starts stopped.</p>
               </div>
               {createMachine.error && <p className="text-[10px] text-rose-300">{createMachine.error.message}</p>}
             </div>
@@ -105,7 +113,7 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
             <DialogFooter className="border-t border-white/[0.07] px-5 py-3.5">
               <DialogClose render={<Button variant="ghost" size="sm" />}>Cancel</DialogClose>
               <Button type="submit" size="sm" disabled={createMachine.isPending || name.trim().length < 2}>
-                {createMachine.isPending ? "Creating…" : "Create machine"}
+                {createMachine.isPending ? "Creating…" : "Create computer"}
               </Button>
             </DialogFooter>
           </form>

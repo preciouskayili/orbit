@@ -27,9 +27,13 @@ function createWindow() {
     minHeight: 720,
     backgroundColor: process.platform === "darwin" ? "#00000000" : "#101112",
     transparent: process.platform === "darwin",
-    vibrancy: process.platform === "darwin" ? "under-window" : undefined,
-    visualEffectState: process.platform === "darwin" ? "active" : undefined,
+    // macOS renders the real desktop blur below our transparent web content.
+    // The opaque workspace covers it; the translucent sidebar lets it show.
+    vibrancy: process.platform === "darwin" ? "sidebar" : undefined,
+    visualEffectState:
+      process.platform === "darwin" ? "followWindow" : undefined,
     hasShadow: true,
+    roundedCorners: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 15, y: 14 },
     show: false,

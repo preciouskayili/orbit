@@ -74,9 +74,15 @@ product can grow without turning the main screen into one large file:
 - `apps/desktop/src/components/machine-viewport.tsx` — the active streamed-computer surface
 - `apps/api/src/data.ts` — the current projects, computers, activity, and messages
 
-Interactive primitives use Base UI (`@base-ui/react`) with local Tailwind
-styles. Keep that split: Base UI owns accessibility, focus, and keyboard
-behavior; Orbit components own appearance and product behavior.
+Interactive primitives live in `apps/desktop/src/components/ui`. They were
+initialized from shadcn's Base UI Nova preset, then reduced to the small API
+Orbit actually uses. Base UI owns accessibility, focus, and keyboard behavior;
+Orbit components own appearance and product behavior. Add future shadcn
+components from `apps/desktop` so the Base UI selection in `components.json`
+is respected.
+
+The interface uses the system San Francisco font on macOS and bundled variable
+Inter everywhere else.
 
 Start with `machine-workspace-page.tsx` when connecting real computer sessions.
 Keep streaming/protocol code outside the React view, then pass session state into

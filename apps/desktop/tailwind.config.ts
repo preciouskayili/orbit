@@ -19,7 +19,7 @@ export default {
         viewport: "0 24px 80px rgba(0,0,0,.45)",
       },
       fontFamily: {
-        sans: ["Geist Variable", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "SF Pro Display", "Inter Variable", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["SFMono-Regular", "Menlo", "Monaco", "monospace"],
       },
     },

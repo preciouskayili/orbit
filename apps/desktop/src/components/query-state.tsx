@@ -1,4 +1,7 @@
-import { AlertCircle, LoaderCircle } from "lucide-react";
+import {
+  CircleNotch as LoaderCircle,
+  WarningCircle as AlertCircle,
+} from "@/components/ui/icons";
 
 export function LoadingState({ label = "Loading workspace" }: { label?: string }) {
   return (
