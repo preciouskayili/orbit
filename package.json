@@ -1,0 +1,19 @@
+{
+  "name": "orbit",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "dev": "pnpm build:packages && concurrently -k -n api,desktop -c blue,magenta \"pnpm --filter @orbit/api dev\" \"pnpm --filter @orbit/desktop dev\"",
+    "dev:desktop": "pnpm build:packages && pnpm --filter @orbit/desktop dev",
+    "dev:api": "pnpm --filter @orbit/shared build && pnpm --filter @orbit/api dev",
+    "build:packages": "pnpm --filter @orbit/shared build && pnpm --filter @orbit/ui build",
+    "build": "pnpm -r --workspace-concurrency=1 build",
+    "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
+    "clean": "pnpm -r --if-present clean"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  }
+}
