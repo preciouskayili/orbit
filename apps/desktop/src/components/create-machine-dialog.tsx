@@ -1,134 +1,45 @@
 import { useState, type FormEvent } from "react";
-import {
-  AppleLogo as Apple,
-  Check,
-  HardDrives as Server,
-  Monitor,
-  Plus,
-  Terminal,
-  X,
-} from "@/components/ui/icons";
 import type { MachineOS } from "@orbit/shared";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import { useCreateMachine } from "@/hooks/queries";
-
-const operatingSystems: Array<{ value: MachineOS; label: string; detail: string; icon: typeof Terminal }> = [
-  { value: "ubuntu", label: "Ubuntu", detail: "24.04 LTS", icon: Terminal },
-  { value: "windows", label: "Windows", detail: "Windows 11", icon: Monitor },
-  { value: "macos", label: "macOS", detail: "Apple silicon", icon: Apple },
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { OsLogo } from "@/components/os-logo";
+import { ErrorNotice, Field } from "@/components/flow-ui";
+import { orbitActions } from "@/lib/orbit-store";
+const operatingSystems = [
+  { value: "ubuntu" as const, label: "Ubuntu", detail: "24.04 LTS" },
+  { value: "windows" as const, label: "Windows", detail: "Windows 11" },
+  { value: "macos" as const, label: "macOS", detail: "Apple silicon" },
 ];
-
 export function CreateMachineDialog({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("Development Computer");
+  const [name, setName] = useState("Development");
   const [os, setOS] = useState<MachineOS>("ubuntu");
   const [cpu, setCPU] = useState(4);
   const [ramGb, setRamGb] = useState(8);
   const [storageGb, setStorageGb] = useState(80);
-  const createMachine = useCreateMachine(projectId);
-
-  const submit = async (event: FormEvent) => {
+  const [count, setCount] = useState(1);
+  const [error, setError] = useState("");
+  function submit(event: FormEvent) {
     event.preventDefault();
-    await createMachine.mutateAsync({ name, os, cpu, ramGb, storageGb });
-    setOpen(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>
-        <Plus className="size-3" /> New computer
-      </DialogTrigger>
-      <DialogContent className="w-[520px] max-w-[calc(100vw-2rem)]" showCloseButton={false}>
-          <DialogHeader className="bg-white/[0.025] px-5 py-4">
-            <DialogTitle>Create a computer</DialogTitle>
-            <DialogDescription>Add a persistent computer to this project.</DialogDescription>
-            <DialogClose render={<Button variant="ghost" size="icon-sm" className="absolute right-3 top-3 text-zinc-500" />}><X className="size-4" /></DialogClose>
-          </DialogHeader>
-
-          <form onSubmit={submit}>
-            <div className="space-y-5 px-5 py-5">
-              <label className="block">
-                <span className="mb-1.5 block text-[11px] font-medium text-zinc-400">Computer name</span>
-                <input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  minLength={2}
-                  required
-                  className="h-9 w-full rounded-lg bg-black/20 px-3 text-[11px] text-zinc-200 outline-none transition-colors placeholder:text-zinc-700 focus:bg-black/30 focus:ring-1 focus:ring-[#ff714e]/30"
-                />
-              </label>
-
-              <fieldset>
-                <legend className="mb-2 text-[10px] font-medium text-zinc-400">Operating system</legend>
-                <div className="grid grid-cols-3 gap-2">
-                  {operatingSystems.map((item) => {
-                    const Icon = item.icon;
-                    const selected = item.value === os;
-                    return (
-                      <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => setOS(item.value)}
-                        className={cn(
-                          "relative flex items-center gap-2.5 rounded-lg px-3 py-3 text-left transition-colors",
-                          selected ? "bg-[#ff714e]/[0.1]" : "bg-white/[0.035] hover:bg-white/[0.06]",
-                        )}
-                      >
-                        <Icon className={cn("size-4", selected ? "text-[#ff8c70]" : "text-zinc-600")} />
-                        <span>
-                          <span className="block text-[10px] font-medium text-zinc-300">{item.label}</span>
-                          <span className="block text-[9px] text-zinc-700">{item.detail}</span>
-                        </span>
-                        {selected && <Check className="absolute right-2 top-2 size-2.5 text-[#ff8c70]" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-
-              <div className="grid grid-cols-3 gap-3">
-                <ResourceSelect label="CPU" value={cpu} values={[2, 4, 8, 16]} suffix="cores" onChange={setCPU} />
-                <ResourceSelect label="RAM" value={ramGb} values={[4, 8, 16, 32]} suffix="GB" onChange={setRamGb} />
-                <ResourceSelect label="Storage" value={storageGb} values={[40, 80, 120, 240]} suffix="GB" onChange={setStorageGb} />
-              </div>
-
-              <div className="flex items-center gap-2 rounded-lg bg-white/[0.035] px-3 py-2.5">
-                <Server className="size-3.5 text-zinc-600" />
-                <p className="text-[11px] leading-5 text-zinc-600">Provisioning is mocked. This computer is added to the in-memory API and starts stopped.</p>
-              </div>
-              {createMachine.error && <p className="text-[10px] text-rose-300">{createMachine.error.message}</p>}
-            </div>
-
-            <DialogFooter className="bg-white/[0.025] px-5 py-3.5">
-              <DialogClose render={<Button variant="ghost" size="sm" />}>Cancel</DialogClose>
-              <Button type="submit" size="sm" disabled={createMachine.isPending || name.trim().length < 2}>
-                {createMachine.isPending ? "Creating…" : "Create computer"}
-              </Button>
-            </DialogFooter>
-          </form>
-      </DialogContent>
-    </Dialog>
-  );
+    try { orbitActions.createFleet(projectId, { name, os, cpu, ramGb, storageGb }, count); setError(""); setOpen(false); }
+    catch (e) { setError((e as Error).message); }
+  }
+  return <Dialog open={open} onOpenChange={setOpen}>
+    <DialogTrigger render={<Button size="sm" />}>New computer</DialogTrigger>
+    <DialogContent className="max-h-[90vh] overflow-y-auto p-6">
+      <DialogTitle>Create computers</DialogTitle><DialogDescription className="mt-2">One persistent workspace, or a fleet ready for parallel work.</DialogDescription>
+      <form onSubmit={submit} className="mt-6 space-y-5">
+        <Field label="Computer name"><input className="flow-input" required minLength={2} maxLength={60} value={name} onChange={e => setName(e.target.value)} /></Field>
+        <fieldset><legend className="mb-2 text-xs text-zinc-400">Operating system</legend><div className="grid grid-cols-3 gap-2">{operatingSystems.map(item => <button key={item.value} type="button" aria-pressed={os === item.value} onClick={() => setOS(item.value)} className={"flex flex-col items-start gap-2 rounded-xl p-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400 " + (os === item.value ? "bg-white/[0.12]" : "bg-white/[0.035] hover:bg-white/[0.065]")}><OsLogo os={item.value} className="size-6" /><span className="text-sm text-zinc-200">{item.label}</span><span className="text-[11px] text-zinc-500">{item.detail}</span></button>)}</div></fieldset>
+        <div className="grid grid-cols-3 gap-3"><Resource label="CPU" value={cpu} values={[2,4,8,16]} suffix="vCPU" change={setCPU} /><Resource label="Memory" value={ramGb} values={[4,8,16,32]} suffix="GB" change={setRamGb} /><Resource label="Disk" value={storageGb} values={[40,80,120,240]} suffix="GB" change={setStorageGb} /></div>
+        <Field label="Number of computers"><input className="flow-input" type="number" min={1} max={10} required value={count} onChange={e => setCount(Number(e.target.value))} /></Field>
+        <p className="rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-zinc-500">{count} computers · {count * cpu} vCPU · {count * ramGb} GB memory allocated. Computers and files persist between tasks. Provisioning is simulated in this prototype.</p>
+        <ErrorNotice message={error} />
+        <div className="flex justify-end gap-2"><DialogClose render={<Button variant="ghost" />}>Cancel</DialogClose><Button type="submit">Create {count === 1 ? "computer" : "fleet"}</Button></div>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }
-
-function ResourceSelect({ label, value, values, suffix, onChange }: { label: string; value: number; values: number[]; suffix: string; onChange: (value: number) => void }) {
-  return (
-    <label>
-      <span className="mb-1.5 block text-[10px] font-medium text-zinc-400">{label}</span>
-      <select value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-9 w-full rounded-lg bg-black/20 px-2.5 text-[10px] text-zinc-300 outline-none transition-colors focus:bg-black/30 focus:ring-1 focus:ring-[#ff714e]/30">
-        {values.map((option) => <option key={option} value={option}>{option} {suffix}</option>)}
-      </select>
-    </label>
-  );
+function Resource({ label, value, values, suffix, change }: { label: string; value: number; values: number[]; suffix: string; change: (value: number) => void }) {
+  return <Field label={label}><select className="flow-input" value={value} onChange={e => change(Number(e.target.value))}>{values.map(v => <option key={v} value={v}>{v} {suffix}</option>)}</select></Field>;
 }

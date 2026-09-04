@@ -1,48 +1,24 @@
-import {
-  Bell,
-  Database,
-  DesktopTower as MonitorCog,
-  HardDrive,
-  Keyboard,
-  ShieldCheck,
-} from "@/components/ui/icons";
-import { TopBar } from "@/components/top-bar";
-
-const settings = [
-  { icon: MonitorCog, title: "Desktop", description: "Launch behavior and appearance", value: "System default" },
-  { icon: Keyboard, title: "Keyboard shortcuts", description: "Workspace and machine controls", value: "Configure" },
-  { icon: Bell, title: "Notifications", description: "Agent and machine activity", value: "Not connected" },
-  { icon: HardDrive, title: "Local storage", description: "Cached project and session data", value: "Mock data only" },
-  { icon: Database, title: "API endpoint", description: "Current Orbit backend", value: "127.0.0.1:4000" },
-  { icon: ShieldCheck, title: "Security", description: "Renderer isolation and native permissions", value: "Isolated" },
-];
-
+import { useState } from "react";
+import { useOrbit } from "@/hooks/use-orbit";
+import { orbitActions, getPersistenceError } from "@/lib/orbit-store";
+import { Page, Field, CreateContainer, ErrorNotice } from "@/components/flow-ui";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 export function SettingsPage() {
-  return (
-    <div className="flex h-full flex-col">
-      <TopBar eyebrow="Orbit" title="Settings" description="Desktop preferences and local development configuration" />
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">
-          <div className="mb-5">
-            <h2 className="text-[14px] font-medium text-zinc-200">Application</h2>
-            <p className="mt-1 text-[12px] text-zinc-600">Desktop behavior, notifications, and local development.</p>
-          </div>
-          <div className="space-y-1">
-            {settings.map((setting) => (
-              <button key={setting.title} disabled className="flex w-full items-center gap-4 rounded-xl bg-[#1c1c1c] px-4 py-4 text-left transition-colors hover:bg-[#222222]">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-white/[0.04] text-zinc-500"><setting.icon className="size-4" /></span>
-                <span className="min-w-0 flex-1"><span className="block text-[13px] font-medium text-zinc-300">{setting.title}</span><span className="mt-1 block text-[11px] text-zinc-600">{setting.description}</span></span>
-                <span className="text-[11px] text-zinc-500">{setting.value}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-5 rounded-2xl bg-amber-400/[0.045] px-4 py-4">
-            <p className="text-[12px] font-medium text-zinc-300">Foundation mode</p>
-            <p className="mt-1 text-[11px] leading-5 text-zinc-600">Cloud providers, credentials, remote streaming, authentication, billing, and real agent execution are intentionally not configured.</p>
-          </div>
-        </div>
-      </div>
+  const state = useOrbit();
+  const navigate = useNavigate();
+  const [name, setName] = useState(state.settings.name);
+  const [saved, setSaved] = useState(false);
+  return <Page title="Settings" description="Your profile, preferences, and workspaces.">
+    <div className="max-w-2xl space-y-6">
+      <form className="space-y-4 rounded-2xl bg-white/[0.035] p-5" onSubmit={e => { e.preventDefault(); orbitActions.settings({ ...state.settings, name: name.trim() }); setSaved(true); }}>
+        <Field label="Display name"><input className="flow-input" required value={name} onChange={e => { setName(e.target.value); setSaved(false); }} /></Field>
+        <label className="flex items-center justify-between text-sm text-zinc-400">Show review notification dots<input type="checkbox" className="accent-orange-400" checked={state.settings.notifications} onChange={e => orbitActions.settings({ ...state.settings, notifications: e.target.checked })} /></label>
+        <Button type="submit" disabled={!name.trim()}>Save profile</Button>{saved && <span role="status" className="ml-3 text-xs text-emerald-300">Saved</span>}
+      </form>
+      <section><div className="mb-3 flex items-center justify-between"><h2 className="text-sm text-zinc-300">Workspaces</h2><CreateContainer kind="workspace" /></div><div className="space-y-2">{state.workspaces.map(w => <button key={w.id} onClick={() => { orbitActions.switchWorkspace(w.id); navigate("/projects"); }} className="flex w-full items-center justify-between rounded-xl bg-white/[0.035] p-4 text-left text-sm text-zinc-300">{w.name}<span className="text-xs text-zinc-500">{w.id === state.workspaceId ? "Current" : "Switch"}</span></button>)}</div></section>
+      <section className="rounded-xl bg-white/[0.025] p-5"><h2 className="text-sm text-zinc-300">About this prototype</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Your projects, computers, runs, and files are saved on this device. Cloud provisioning, real agent execution, authentication, and scheduled background runs will be connected in the backend phase.</p></section>
+      <ErrorNotice message={getPersistenceError()} />
     </div>
-  );
+  </Page>;
 }

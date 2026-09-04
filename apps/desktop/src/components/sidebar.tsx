@@ -1,360 +1,81 @@
-import {
-  Bell,
-  Buildings,
-  SquaresFour as Blocks,
-  Robot as Bot,
-  Check,
-  CaretDown as ChevronDown,
-  CaretRight as ChevronRight,
-  Clock as Clock3,
-  Folder,
-  FolderOpen,
-  GitPullRequest,
-  Question as HelpCircle,
-  SignOut as LogOut,
-  ChatCircleDots as MessageSquarePlus,
-  SidebarSimple as PanelLeft,
-  Plus,
-  MagnifyingGlass as Search,
-  Gear as Settings,
-} from "@/components/ui/icons";
-import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useProjects } from "@/hooks/queries";
+import { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Bell, Buildings, CaretDown, CaretRight, Check, Clock, Folder, FolderOpen, Gear, MagnifyingGlass, Monitor, Plus, Robot, Sparkle, ChatCircleDots } from "@/components/ui/icons";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { CreateContainer } from "@/components/flow-ui";
+import { useOrbit } from "@/hooks/use-orbit";
+import { orbitActions } from "@/lib/orbit-store";
 
-const primaryNavigation = [
-  { label: "New task", icon: MessageSquarePlus, shortcut: "⌘N" },
-  { label: "Pull requests", icon: GitPullRequest },
-  { label: "Agents", icon: Bot },
-  { label: "Scheduled", icon: Clock3 },
-  { label: "Skills", icon: Blocks },
+const navigation = [
+  { label: "New task", path: "/new", icon: Plus },
+  { label: "Tasks", path: "/tasks", icon: ChatCircleDots },
+  { label: "Computers", path: "/projects", icon: Monitor },
+  { label: "Agents", path: "/agents", icon: Robot },
+  { label: "Scheduled", path: "/scheduled", icon: Clock },
+  { label: "Skills", path: "/skills", icon: Sparkle },
 ];
-
-const recentSessions = [
-  {
-    label: "Verify the Trace release",
-    projectId: "trace",
-    path: "/projects/trace/machines/ubuntu-dev",
-    unread: true,
-  },
-  {
-    label: "Review the returns flow",
-    projectId: "trace",
-    path: "/projects/trace/machines/windows-qa",
-  },
-  {
-    label: "Prepare the macOS build",
-    projectId: "trace",
-    path: "/projects/trace/machines/mac-build",
-  },
-  {
-    label: "Debug agent handoff",
-    projectId: "grasp",
-    path: "/projects/grasp/machines/grasp-linux",
-  },
-  {
-    label: "Audit fleet credentials",
-    projectId: "trace",
-    path: "/projects/trace",
-  },
-  {
-    label: "Compare browser snapshots",
-    projectId: "grasp",
-    path: "/projects/grasp/machines/grasp-windows",
-  },
-  {
-    label: "Provision an Ubuntu workspace",
-    projectId: "grasp",
-    path: "/projects/grasp",
-  },
-  {
-    label: "Inspect the failed CI run",
-    projectId: "trace",
-    path: "/projects/trace/machines/ubuntu-dev",
-  },
-  {
-    label: "Summarize computer activity",
-    projectId: "personal",
-    path: "/projects/personal",
-  },
-  {
-    label: "Stage the desktop artifact",
-    projectId: "trace",
-    path: "/projects/trace/machines/mac-build",
-  },
-  {
-    label: "Check persistent storage",
-    projectId: "personal",
-    path: "/projects/personal/machines/personal-mac",
-  },
-];
-
-const workspaces = ["Personal workspace", "Orbit team"];
-
 export function Sidebar({ projectId }: { projectId: string }) {
-  const navigate = useNavigate();
+  const state = useOrbit();
   const location = useLocation();
-  const { data: projects = [] } = useProjects();
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
-    () => new Set([projectId]),
-  );
-  const [workspace, setWorkspace] = useState(workspaces[0]!);
-
-  useEffect(() => {
-    setExpandedProjects((current) => {
-      if (current.has(projectId)) return current;
-      const next = new Set(current);
-      next.add(projectId);
-      return next;
-    });
-  }, [projectId]);
-
-  const toggleProject = (id: string) => {
-    setExpandedProjects((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  return (
-    <aside className="flex min-h-0 w-72 shrink-0 flex-col bg-black/10">
-      <div className="window-drag flex h-[54px] shrink-0 items-center justify-end gap-1 px-4">
-        <Tooltip>
-          <TooltipTrigger className="flex size-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-200">
-            <PanelLeft className="size-[17px]" />
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="bg-zinc-100 text-zinc-900">
-            Toggle sidebar
-          </TooltipContent>
-        </Tooltip>
-        <button
-          className="flex size-8 items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300"
-          aria-label="Back"
-        >
-          <ChevronRight className="size-4 rotate-180" />
-        </button>
-        <button
-          className="flex size-8 items-center justify-center rounded-lg text-zinc-700 hover:text-zinc-300"
-          aria-label="Forward"
-        >
-          <ChevronRight className="size-4" />
-        </button>
+  const navigate = useNavigate();
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [notifications, setNotifications] = useState(false);
+  const projects = state.projects.filter(p => p.workspaceId === state.workspaceId);
+  const tasks = state.tasks.filter(t => projects.some(p => p.id === t.projectId));
+  const workspace = state.workspaces.find(w => w.id === state.workspaceId)!;
+  const reviews = tasks.filter(t => t.status === "review");
+  const initials = state.settings.name.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  const row = "flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400";
+  return <aside className="flex min-h-0 w-72 shrink-0 flex-col bg-black/10">
+    <div className="window-drag h-[54px] shrink-0" />
+    <div className="flex h-11 shrink-0 items-center px-5">
+      <Link to="/new" className="text-lg font-medium text-zinc-100">Orbit</Link>
+      <button aria-label="Search workspace" onClick={() => setSearchOpen(true)} className="ml-auto rounded-lg p-2 text-zinc-500 hover:bg-white/5"><MagnifyingGlass className="size-4" /></button>
+      <button aria-label="Notifications" onClick={() => setNotifications(true)} className="relative rounded-lg p-2 text-zinc-500 hover:bg-white/5"><Bell className="size-4" />{reviews.length > 0 && state.settings.notifications && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-sky-300" />}</button>
+    </div>
+    <nav aria-label="Main navigation" className="mt-2 shrink-0 space-y-0.5 px-4">
+      {navigation.map(item => <Link key={item.path} to={item.path} aria-current={location.pathname === item.path ? "page" : undefined} className={row + (location.pathname === item.path ? " bg-white/[0.065] text-zinc-100" : " text-zinc-400")}><item.icon className="size-3.5" />{item.label}</Link>)}
+    </nav>
+    <div className="sidebar-scroll mt-6 min-h-0 flex-1 overflow-y-auto"><div className="sidebar-scroll-content pb-4">
+      <div className="flex h-8 items-center justify-between px-2.5"><h2 className="text-sm text-zinc-500">Projects</h2><CreateContainer kind="project" compact /></div>
+      <div className="mt-1 space-y-1">
+        {projects.map(project => { const expanded = !closed.has(project.id); const Icon = expanded ? FolderOpen : Folder;
+          return <div key={project.id}>
+            <button onClick={() => setClosed(current => { const next = new Set(current); if (next.has(project.id)) next.delete(project.id); else next.add(project.id); return next; })} aria-expanded={expanded} className={row + " text-zinc-300"}><Icon className="size-3.5 text-zinc-500" /><span className="min-w-0 flex-1 truncate">{project.name}</span><CaretRight className={"size-3 text-zinc-600 " + (expanded ? "rotate-90" : "")} /></button>
+            {expanded && <div className="mt-1 space-y-0.5">
+              <Link to={"/projects/" + project.id} className={row + " !pl-10 " + (location.pathname === "/projects/" + project.id ? "bg-white/[0.075] text-zinc-200" : "text-zinc-500")}>All computers<span className="ml-auto text-xs">{project.machineCount}</span></Link>
+              {tasks.filter(t => t.projectId === project.id).slice(0, 3).map(task => <Link key={task.id} to={"/tasks/" + task.id} className={row + " !pl-10 " + (location.pathname === "/tasks/" + task.id ? "bg-white/[0.075] text-zinc-200" : "text-zinc-500")}><span className="truncate">{task.title}</span></Link>)}
+            </div>}
+          </div>;
+        })}
+        {!projects.length && <p className="px-2.5 py-3 text-xs text-zinc-600">Create a project to organize your fleet.</p>}
       </div>
-
-      <div className="flex h-11 shrink-0 items-center px-5">
-        <p className="text-lg font-medium text-zinc-100">Orbit</p>
-
-        <div className="ml-auto flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger className="flex size-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-200">
-              <Search className="size-[17px]" />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-zinc-100 text-zinc-900">
-              Search <span className="ml-1 text-zinc-500">⌘K</span>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger className="relative flex size-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-200">
-              <Bell className="size-[17px]" />
-              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-[#e36b4d]" />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="bg-zinc-100 text-zinc-900">
-              Notifications
-            </TooltipContent>
-          </Tooltip>
-        </div>
+      <h2 className="mt-7 px-2.5 py-2 text-sm text-zinc-500">Recents</h2>
+      {tasks.slice(0, 15).map(task => <Link key={task.id} to={"/tasks/" + task.id} className={row + " text-zinc-400"}><span className="min-w-0 flex-1 truncate">{task.title}</span>{task.status === "review" && <span className="size-2 rounded-full bg-sky-300" />}</Link>)}
+      {!tasks.length && <p className="px-2.5 py-2 text-xs text-zinc-600">Your tasks will appear here.</p>}
+    </div></div>
+    <footer className="shrink-0 px-4 pb-3">
+      <DropdownMenu><DropdownMenuTrigger className="mt-2 flex h-14 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#34465c] text-[11px] text-zinc-200">{initials}</span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-sm text-zinc-200">{state.settings.name}</span><span className="mt-1 block truncate text-[11px] text-zinc-500">{workspace.name}</span></span><CaretDown className="size-3 text-zinc-500" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" className="w-64">
+        <DropdownMenuGroup><DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+          {state.workspaces.map(w => <DropdownMenuItem key={w.id} onClick={() => { orbitActions.switchWorkspace(w.id); navigate("/projects"); }}>{w.id === state.workspaceId ? <Check className="size-4 text-emerald-300" /> : <Buildings className="size-4" />}{w.name}</DropdownMenuItem>)}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup><DropdownMenuLabel>Account</DropdownMenuLabel><DropdownMenuItem onClick={() => navigate("/settings")}><Gear className="size-4" />Settings & workspaces</DropdownMenuItem></DropdownMenuGroup>
+      </DropdownMenuContent></DropdownMenu>
+    </footer>
+    <Dialog open={searchOpen} onOpenChange={setSearchOpen}><DialogContent className="p-6"><DialogTitle>Search workspace</DialogTitle><DialogDescription className="mt-2">Find a project, computer, or task.</DialogDescription>
+      <input className="flow-input mt-5" aria-label="Search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} autoFocus />
+      <div className="mt-4 max-h-80 space-y-1 overflow-auto">
+        {[...projects.map(p => ({ label: p.name, path: "/projects/" + p.id, kind: "Project" })), ...state.machines.filter(m => projects.some(p => p.id === m.projectId)).map(m => ({ label: m.name, path: "/projects/" + m.projectId + "/machines/" + m.id, kind: "Computer" })), ...tasks.map(t => ({ label: t.title, path: "/tasks/" + t.id, kind: "Task" }))].filter(item => item.label.toLowerCase().includes(search.toLowerCase())).map(item => <Link key={item.path} to={item.path} onClick={() => setSearchOpen(false)} className={row + " text-zinc-300"}><span className="truncate">{item.label}</span><span className="ml-auto text-xs text-zinc-600">{item.kind}</span></Link>)}
       </div>
-
-      <nav className="mt-2 shrink-0 space-y-0.5 px-4">
-        {primaryNavigation.map((item) => (
-          <button
-            key={item.label}
-            className="group flex h-8 w-full items-center gap-1 gap-x-3 rounded-lg px-2.5 text-left text-sm text-zinc-300 transition-colors hover:bg-white/[0.055] hover:text-white"
-          >
-            <item.icon
-              className="size-[14px] shrink-0 text-zinc-400 transition-colors group-hover:text-zinc-200"
-              weight="regular"
-            />
-            <span>{item.label}</span>
-            {item.shortcut && (
-              <span className="ml-auto text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100">
-                {item.shortcut}
-              </span>
-            )}
-          </button>
-        ))}
-      </nav>
-
-      <div className="sidebar-scroll mt-7 min-h-0 flex-1 overflow-y-auto">
-        <div className="sidebar-scroll-content pb-4">
-          <div className="flex h-8 items-center px-2.5">
-            <span className="text-sm font-medium text-zinc-500">Projects</span>
-          </div>
-
-          <div className="mt-1 space-y-1">
-            {projects.map((project) => {
-              const active = project.id === projectId;
-              const expanded = expandedProjects.has(project.id);
-              const projectSessions = recentSessions
-                .filter((session) => session.projectId === project.id)
-                .slice(0, 3);
-              return (
-                <div key={project.id}>
-                  <button
-                    onClick={() => toggleProject(project.id)}
-                    aria-expanded={expanded}
-                    className="group flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm text-zinc-300 transition-colors hover:bg-white/[0.045] hover:text-zinc-100"
-                  >
-                    {expanded ? (
-                      <FolderOpen
-                        className="size-[14px] shrink-0 text-zinc-400 transition-colors group-hover:text-zinc-200"
-                        weight="regular"
-                      />
-                    ) : (
-                      <Folder
-                        className="size-[14px] shrink-0 text-zinc-400 transition-colors group-hover:text-zinc-200"
-                        weight="regular"
-                      />
-                    )}
-                    <span className="min-w-0 flex-1 truncate">
-                      {project.name}
-                    </span>
-                    <ChevronRight
-                      className={`size-3 shrink-0 text-zinc-600 transition-transform ${expanded ? "rotate-90" : ""}`}
-                    />
-                  </button>
-
-                  {expanded && (
-                    <div className="mt-1 space-y-0.5">
-                      <button
-                        onClick={() => navigate(`/projects/${project.id}`)}
-                        aria-current={
-                          location.pathname === `/projects/${project.id}`
-                            ? "page"
-                            : undefined
-                        }
-                        className={`flex h-8 w-full items-center rounded-xl pl-[42px] pr-3 text-left text-sm transition-colors ${location.pathname === `/projects/${project.id}` ? "bg-white/[0.075] text-zinc-200" : "text-zinc-500 hover:bg-white/[0.045] hover:text-zinc-200"}`}
-                      >
-                        All computers
-                      </button>
-                      {projectSessions.map((session) => {
-                        const selected =
-                          active && location.pathname === session.path;
-                        return (
-                          <button
-                            key={`${project.id}-${session.label}`}
-                            onClick={() => navigate(session.path)}
-                            className={`flex h-8 w-full items-center rounded-xl pl-[42px] pr-3 text-left text-sm transition-colors ${selected ? "bg-white/[0.075] text-zinc-200" : "text-zinc-500 hover:bg-white/[0.045] hover:text-zinc-200"}`}
-                          >
-                            <span className="truncate">{session.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-7 flex h-8 items-center px-2.5">
-            <span className="text-sm font-medium text-zinc-500">Recents</span>
-          </div>
-          <div className="mt-1 space-y-0.5">
-            {recentSessions.map((session) => (
-              <button
-                key={session.label}
-                onClick={() => navigate(session.path)}
-                className="group flex h-8 w-full items-center rounded-lg px-2.5 text-left text-sm text-zinc-300 transition-colors hover:bg-white/[0.045] hover:text-zinc-100"
-              >
-                <span className="min-w-0 flex-1 truncate">{session.label}</span>
-                {session.unread && (
-                  <span className="ml-3 size-2 shrink-0 rounded-full bg-[#7db7ff]" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <footer className="shrink-0 px-4 pb-3">
-        <Separator className="bg-white/[0.065]" />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger className="mt-1 flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left outline-none hover:bg-white/[0.05]">
-            <span className="flex size-8 items-center justify-center rounded-full bg-[#34465c] text-[11px] font-medium text-zinc-200">
-              PK
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">
-              <span className="block truncate">Precious Kayili</span>
-              <span className="mt-0.5 block truncate text-[11px] font-normal text-zinc-500">
-                {workspace}
-              </span>
-            </span>
-            <ChevronDown className="size-4 text-zinc-600" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            side="top"
-            sideOffset={8}
-            className="w-60 bg-[#292a2c] p-1.5 text-zinc-200 shadow-2xl"
-          >
-            <DropdownMenuLabel className="px-2 py-1.5 text-[11px] text-zinc-500">
-              Workspaces
-            </DropdownMenuLabel>
-            {workspaces.map((option) => (
-              <DropdownMenuItem
-                key={option}
-                onClick={() => setWorkspace(option)}
-                className="px-2 py-2 text-[13px] focus:bg-white/[0.07] focus:text-white"
-              >
-                {option === workspace ? (
-                  <Check className="size-4 text-emerald-400" />
-                ) : (
-                  <Buildings className="size-4 text-zinc-500" />
-                )}
-                {option}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuItem className="px-2 py-2 text-[13px] focus:bg-white/[0.07] focus:text-white">
-              <Plus className="size-4" /> New workspace
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-white/[0.07]" />
-            <DropdownMenuLabel className="px-2 py-1.5 text-[11px] text-zinc-500">
-              precious@orbit.dev
-            </DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => navigate("/settings")}
-              className="px-2 py-2 text-[13px] focus:bg-white/[0.07] focus:text-white"
-            >
-              <Settings className="size-4" /> Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem className="px-2 py-2 text-[13px] focus:bg-white/[0.07] focus:text-white">
-              <HelpCircle className="size-4" /> Help and feedback
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-white/[0.07]" />
-            <DropdownMenuItem className="px-2 py-2 text-[13px] text-rose-300 focus:bg-rose-500/10 focus:text-rose-200">
-              <LogOut className="size-4" /> Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </footer>
-    </aside>
-  );
+    </DialogContent></Dialog>
+    <Dialog open={notifications} onOpenChange={setNotifications}><DialogContent className="p-6"><DialogTitle>Notifications</DialogTitle><DialogDescription className="mt-2">Tasks waiting for your review.</DialogDescription><div className="mt-5 space-y-2">{reviews.map(t => <Link key={t.id} to={"/tasks/" + t.id} onClick={() => setNotifications(false)} className="block rounded-xl bg-white/5 p-3 text-sm text-zinc-300">{t.title}<span className="mt-1 block text-xs text-sky-300">Ready for review</span></Link>)}{!reviews.length && <p className="text-sm text-zinc-500">You're all caught up.</p>}</div></DialogContent></Dialog>
+  </aside>;
 }

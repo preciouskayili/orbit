@@ -1,15 +1,13 @@
 import type { ActivityEvent, Machine } from "@orbit/shared";
 import { Link } from "react-router-dom";
 import {
-  AppleLogo,
   ArrowUpRight,
   Cpu,
   HardDrive,
   Memory,
-  Monitor,
-  Terminal,
 } from "@/components/ui/icons";
 import { StatusBadge } from "@/components/status-badge";
+import { OsLogo } from "@/components/os-logo";
 
 interface ComputerCardProps {
   machine: Machine;
@@ -22,12 +20,6 @@ export function ComputerCard({
   activity,
   activityState,
 }: ComputerCardProps) {
-  const Icon =
-    machine.os === "macos"
-      ? AppleLogo
-      : machine.os === "ubuntu"
-        ? Terminal
-        : Monitor;
   const lastSeen = new Date(machine.lastSeenAt);
   return (
     <Link
@@ -39,7 +31,7 @@ export function ComputerCard({
         <span
           className={`flex size-10 items-center justify-center rounded-xl ${machine.status === "running" ? "bg-emerald-400/[0.08] text-emerald-300" : "bg-white/[0.045] text-zinc-400"}`}
         >
-          <Icon className="size-5" />
+          <OsLogo os={machine.os} />
         </span>
         <StatusBadge status={machine.status} />
       </div>

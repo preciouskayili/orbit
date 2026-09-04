@@ -5,6 +5,7 @@ import { RouterProvider } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { router } from "./router";
 import "./styles.css";
+import { subscribeOrbit } from "@/lib/orbit-store";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,6 +16,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+subscribeOrbit(() => { void queryClient.invalidateQueries(); });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

@@ -1,144 +1,88 @@
-import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowClockwise as RefreshCw,
-  ArrowsClockwise as RotateCw,
-  CaretDown as ChevronDown,
-  Check,
-  Circle,
-  UserCircle as CircleUserRound,
-  Code as Code2,
-  Cursor as MousePointer2,
-  FileText,
-  Globe as Globe2,
-  Gauge as LayoutDashboard,
-  Gear as Settings,
-  Lock,
-  MagnifyingGlass as Search,
-  Package as PackageCheck,
-  ShieldCheckered as ShieldCheck,
-  Terminal,
-} from "@/components/ui/icons";
+import { useState, type FormEvent } from "react";
 import type { Machine } from "@orbit/shared";
+import { Link } from "react-router-dom";
+import { useOrbit } from "@/hooks/use-orbit";
+import { orbitActions } from "@/lib/orbit-store";
+import { OsLogo } from "@/components/os-logo";
+import { Button } from "@/components/ui/button";
+import { ErrorNotice, Field } from "@/components/flow-ui";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { FileText, Globe, Terminal, Monitor } from "@/components/ui/icons";
 
-const checks = [
-  { label: "Unit and integration tests", detail: "51 checks", state: "Passed" },
-  { label: "Browser regression", detail: "Chrome · Windows", state: "Running" },
-  { label: "Desktop artifact", detail: "macOS arm64", state: "Ready" },
-];
-
+type App = "Desktop" | "Terminal" | "Files" | "Browser";
 export function MachineViewport({ machine }: { machine: Machine }) {
-  const offline = machine.status !== "running";
-
-  return (
-    <section className="relative min-h-0 flex-1 overflow-hidden bg-[#111111] p-3">
-      <div className="flex h-full flex-col overflow-hidden rounded-xl bg-[#202124] shadow-[0_24px_70px_rgba(0,0,0,.38)]">
-        <ComputerTitleBar machine={machine} />
-        <BrowserChrome machine={machine} />
-        <ReleaseDashboard />
-
-        {offline && (
-          <div className="absolute inset-3 flex items-center justify-center rounded-xl bg-[#111]/80 backdrop-blur-md">
-            <div className="w-[280px] rounded-2xl bg-[#242424] p-6 text-center text-zinc-200 shadow-2xl">
-              <span className="mx-auto flex size-10 items-center justify-center rounded-xl bg-white/[0.055] text-zinc-500"><Terminal className="size-5" /></span>
-              <p className="mt-4 text-[14px] font-medium">{machine.name} is stopped</p>
-              <p className="mt-1.5 text-[12px] leading-5 text-zinc-500">Start this computer to reconnect the agent and restore its session.</p>
-              <button className="mt-4 inline-flex h-8 items-center rounded-lg bg-zinc-100 px-3 text-[12px] font-medium text-zinc-900 hover:bg-white">Start computer</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-xl bg-[#252525]/95 p-1 shadow-[0_10px_36px_rgba(0,0,0,.42)] backdrop-blur-xl">
-        <DockItem label="Browser" active><Globe2 className="size-4" /></DockItem>
-        <DockItem label="Terminal"><Terminal className="size-4" /></DockItem>
-        <DockItem label="Code"><Code2 className="size-4" /></DockItem>
-        <span className="mx-1 h-5 w-px bg-white/[0.08]" />
-        <DockItem label="Restart"><RotateCw className="size-4" /></DockItem>
-      </div>
-    </section>
-  );
-}
-
-function ComputerTitleBar({ machine }: { machine: Machine }) {
-  return (
-    <div className="flex h-8 shrink-0 items-center bg-[#25262a] px-3">
-      <div className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-[#ff605c]" /><span className="size-2.5 rounded-full bg-[#ffbd44]" /><span className="size-2.5 rounded-full bg-[#28c840]" /></div>
-      <span className="mx-auto text-[10px] text-zinc-500">{machine.name} · Orbit secure session</span>
-      <span className="flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2 py-1 text-[9px] font-medium text-emerald-300"><span className="size-1.5 rounded-full bg-emerald-400" /> Agent controlled</span>
-    </div>
-  );
-}
-
-function BrowserChrome({ machine }: { machine: Machine }) {
-  return (
-    <div className="shrink-0 bg-[#2d2e33]">
-      <div className="flex h-9 items-end px-3">
-        <div className="flex h-8 w-[220px] items-center gap-2 rounded-t-lg bg-[#3a3b41] px-3 text-[11px] text-zinc-300"><PackageCheck className="size-3.5 text-[#df7657]" /><span className="truncate">Trace · Release control</span></div>
-        <button className="mb-1 ml-1 flex size-6 items-center justify-center rounded-md text-zinc-500 hover:bg-white/[0.06]">+</button>
-      </div>
-      <div className="flex h-10 items-center gap-3 px-3 pb-2">
-        <ArrowLeft className="size-4 text-zinc-500" /><ArrowRight className="size-4 text-zinc-600" /><RefreshCw className="size-3.5 text-zinc-500" />
-        <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-lg bg-[#202125] px-3 text-[10px] text-zinc-400"><Lock className="size-3 text-emerald-400/80" /> release.trace.app/checks <span className="ml-auto text-zinc-600">{machine.id}</span></div>
-        <CircleUserRound className="size-4 text-zinc-500" />
+  const state = useOrbit();
+  const [app, setApp] = useState<App>("Desktop");
+  const [error, setError] = useState("");
+  const [rename, setRename] = useState(false);
+  const [name, setName] = useState(machine.name);
+  const running = machine.status === "running";
+  const human = state.control[machine.id] === "human";
+  const task = state.tasks.find(t => t.machineIds.includes(machine.id) && !["completed", "cancelled"].includes(t.status));
+  const events = state.activity.filter(a => a.machineId === machine.id).slice().reverse();
+  const act = (fn: () => void) => { try { fn(); setError(""); } catch (e) { setError((e as Error).message); } };
+  return <section className="flex min-h-0 flex-1 flex-col">
+    <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+      <OsLogo os={machine.os} /><div className="min-w-0"><h1 className="text-sm text-zinc-200">{machine.name}</h1><p className="mt-1 text-xs text-zinc-500">{machine.osLabel} · {machine.cpu} vCPU · {machine.ramGb} GB memory</p></div>
+      <div className="ml-auto flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setRename(true)}>Rename</Button>
+        {running && <Button variant="secondary" size="sm" onClick={() => act(() => orbitActions.setControl(machine.id, human ? "agent" : "human"))}>{human ? "Hand back to agent" : "Take control"}</Button>}
+        <Button variant={running ? "secondary" : "default"} size="sm" onClick={() => act(() => orbitActions.machineStatus(machine.id, running ? "stopped" : "running"))}>{running ? "Stop computer" : "Start computer"}</Button>
       </div>
     </div>
-  );
-}
-
-function ReleaseDashboard() {
-  return (
-    <div className="flex min-h-0 flex-1 bg-[#f5f5f3] text-[#252525]">
-      <aside className="hidden w-[168px] shrink-0 bg-[#ecece8] p-4 xl:block">
-        <div className="flex items-center gap-2 text-[14px] font-semibold tracking-[-0.02em]"><span className="flex size-7 items-center justify-center rounded-lg bg-[#242424] text-[11px] text-white">T</span> Trace</div>
-        <nav className="mt-7 space-y-1 text-[11px] text-[#777773]">
-          <p className="flex items-center gap-2.5 rounded-lg px-2.5 py-2"><LayoutDashboard className="size-4" /> Overview</p>
-          <p className="flex items-center gap-2.5 rounded-lg bg-white px-2.5 py-2 font-medium text-[#292929] shadow-sm"><ShieldCheck className="size-4" /> Release</p>
-          <p className="flex items-center gap-2.5 rounded-lg px-2.5 py-2"><FileText className="size-4" /> Artifacts</p>
-          <p className="flex items-center gap-2.5 rounded-lg px-2.5 py-2"><Settings className="size-4" /> Settings</p>
-        </nav>
-      </aside>
-
-      <main className="min-w-0 flex-1 overflow-y-auto px-[clamp(18px,3vw,44px)] py-7">
-        <div className="mx-auto max-w-[780px]">
-          <div className="flex items-start justify-between gap-4">
-            <div><p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#a09f99]">Release 0.8.4</p><h1 className="mt-1 text-[clamp(20px,2vw,28px)] font-semibold tracking-[-0.035em]">Ready for review</h1><p className="mt-1.5 text-[12px] text-[#777773]">Three computers are validating this release in parallel.</p></div>
-            <button className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-[11px] font-medium shadow-sm">Latest run <ChevronDown className="size-3.5 text-[#888]" /></button>
-          </div>
-
-          <div className="mt-7 grid grid-cols-3 gap-3">
-            <Metric label="Checks" value="8 / 9" detail="One needs review" />
-            <Metric label="Computers" value="3" detail="1 active now" />
-            <Metric label="Duration" value="8m 42s" detail="34% faster" good />
-          </div>
-
-          <div className="mt-5 overflow-hidden rounded-xl bg-white shadow-[0_8px_30px_rgba(30,30,30,.055)]">
-            <div className="flex items-center bg-[#fafaf8] px-4 py-3"><span className="text-[12px] font-semibold">Release checks</span><span className="ml-2 rounded-full bg-[#efefec] px-2 py-0.5 text-[9px] text-[#777]">3</span><div className="ml-auto flex h-7 items-center gap-2 rounded-lg bg-[#f0f0ed] px-2.5 text-[10px] text-[#999]"><Search className="size-3" /> Search</div></div>
-            {checks.map((check, index) => (
-              <div key={check.label} className="flex items-center gap-3 px-4 py-3 odd:bg-[#fcfcfa]">
-                <span className={`flex size-7 items-center justify-center rounded-full ${check.state === "Running" ? "bg-[#fff0e9] text-[#d66747]" : "bg-[#eaf6ef] text-[#2f9468]"}`}>{check.state === "Running" ? <Circle className="size-2.5 fill-current" /> : <Check className="size-3.5" />}</span>
-                <span className="min-w-0 flex-1"><span className="block text-[12px] font-medium">{check.label}</span><span className="mt-0.5 block text-[10px] text-[#969691]">{check.detail}</span></span>
-                <span className={`rounded-full px-2 py-1 text-[9px] font-medium ${check.state === "Running" ? "bg-[#fff0e9] text-[#c85c3e]" : "bg-[#edf6f0] text-[#32835f]"}`}>{check.state}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="relative mt-4 flex items-center gap-3 rounded-xl bg-[#fff3ed] p-4">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-[#e16e4d]/10 text-[#d56647]"><PackageCheck className="size-[18px]" /></span>
-            <span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold">Browser review is ready</span><span className="mt-1 block truncate text-[10px] text-[#898681]">The agent left the final approval open for you.</span></span>
-            <button className="h-8 rounded-lg bg-[#252525] px-3 text-[10px] font-medium text-white shadow-sm">Review action</button>
-            <MousePointer2 className="absolute bottom-1 right-[58px] size-5 -rotate-12 fill-white text-[#222] drop-shadow" />
-          </div>
-        </div>
-      </main>
+    {error && <div className="px-5 pb-3"><ErrorNotice message={error} /></div>}
+    {task && <Link to={"/tasks/" + task.id} className="mx-5 mb-3 flex flex-wrap gap-2 rounded-lg bg-white/[0.035] px-3 py-2 text-xs text-zinc-400"><span className="text-[#db7657]">{task.status}</span><span className="min-w-0 flex-1 truncate">{task.title}</span><span>Open task →</span></Link>}
+    <div className="mx-5 flex flex-wrap items-center gap-1 rounded-t-xl bg-[#242526] p-2">
+      {(["Desktop", "Terminal", "Files", "Browser"] as App[]).map(tab => <button key={tab} onClick={() => setApp(tab)} aria-pressed={app === tab} className={"rounded-lg px-3 py-2 text-xs " + (app === tab ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:bg-white/5")}>{tab}</button>)}
+      <span className="ml-auto px-2 text-[11px] text-zinc-500">Demo session · {human ? "Human control" : "Agent control"}</span>
     </div>
-  );
+    <div className="mx-5 mb-5 min-h-0 flex-1 overflow-auto rounded-b-xl bg-[#111313]">
+      {!running ? <div className="flex min-h-[300px] h-full flex-col items-center justify-center gap-4 p-8 text-center"><Monitor className="size-9 text-zinc-600" /><h2 className="text-lg text-zinc-200">Computer is stopped</h2><p className="max-w-sm text-sm leading-6 text-zinc-500">Your files and workspace are retained. Start the computer to continue.</p><Button onClick={() => act(() => orbitActions.machineStatus(machine.id, "running"))}>Start computer</Button></div>
+      : app === "Desktop" ? <div className="p-6">
+        <div className="rounded-2xl bg-[#1c2022] p-6"><OsLogo os={machine.os} className="size-9" /><h2 className="mt-4 text-lg text-zinc-200">{machine.name} is ready</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Open an app below. Take control to explore the demo terminal or edit persistent files.</p><div className="mt-6 flex flex-wrap gap-3">{[{ title: "Terminal" as const, Icon: Terminal }, { title: "Files" as const, Icon: FileText }, { title: "Browser" as const, Icon: Globe }].map(({ title, Icon }) => <button key={title} onClick={() => setApp(title)} className="flex min-w-24 flex-col items-center gap-3 rounded-xl bg-white/5 p-5 text-xs text-zinc-300 hover:bg-white/10"><Icon className="size-6" />{title}</button>)}</div></div>
+        <h3 className="mb-3 mt-6 text-xs text-zinc-500">Computer activity</h3><div className="space-y-3">{events.slice(0, 8).map(event => <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 text-xs"><span className="text-zinc-400">{event.title}</span><time className="text-zinc-600">{new Date(event.timestamp).toLocaleTimeString()}</time></div>)}{!events.length && <p className="text-xs text-zinc-600">No activity recorded yet.</p>}</div>
+      </div>
+      : app === "Terminal" ? <DemoTerminal machine={machine} enabled={human} />
+      : app === "Files" ? <FileExplorer machine={machine} enabled={human} />
+      : <DemoBrowser enabled={human} />}
+    </div>
+    <Dialog open={rename} onOpenChange={setRename}><DialogContent className="p-6"><DialogTitle>Rename computer</DialogTitle><DialogDescription className="mt-2">The computer's files and tasks stay attached.</DialogDescription><form className="mt-5 space-y-4" onSubmit={e => { e.preventDefault(); try { orbitActions.renameMachine(machine.id, name); setRename(false); setError(""); } catch (e) { setError((e as Error).message); } }}><Field label="Name"><input className="flow-input" required minLength={2} value={name} onChange={e => setName(e.target.value)} /></Field><ErrorNotice message={error} /><Button type="submit">Save name</Button></form></DialogContent></Dialog>
+  </section>;
 }
-
-function Metric({ label, value, detail, good = false }: { label: string; value: string; detail: string; good?: boolean }) {
-  return <div className="rounded-xl bg-white p-3.5 shadow-[0_5px_20px_rgba(30,30,30,.04)]"><p className="text-[9px] font-medium uppercase tracking-[0.1em] text-[#aaa9a4]">{label}</p><p className="mt-1.5 text-[18px] font-semibold tracking-[-0.03em]">{value}</p><p className={`mt-1 text-[9px] ${good ? "text-[#2f9368]" : "text-[#979691]"}`}>{detail}</p></div>;
+function DemoTerminal({ machine, enabled }: { machine: Machine; enabled: boolean }) {
+  const state = useOrbit();
+  const [input, setInput] = useState("");
+  const [lines, setLines] = useState(["Orbit demo shell. Type help to see supported commands."]);
+  function submit(e: FormEvent) {
+    e.preventDefault(); if (!enabled) return;
+    const command = input.trim();
+    const files = state.files[machine.id] ?? {};
+    let result = "";
+    if (command === "clear") { setLines([]); setInput(""); return; }
+    if (command === "help") result = "help · pwd · ls · cat <filename> · uname · clear\nCommands operate on this prototype's local workspace.";
+    else if (command === "pwd") result = "/workspace";
+    else if (command === "ls") result = Object.keys(files).join("\n") || "(empty workspace)";
+    else if (command === "uname") result = machine.osLabel;
+    else if (command.startsWith("cat ")) result = files[command.slice(4)] ?? "File not found.";
+    else result = "Command unavailable in the demo shell. Type help.";
+    setLines(current => [...current, "$ " + command, result]); setInput("");
+  }
+  return <div className="p-5 font-mono text-xs leading-6 text-zinc-400"><pre className="whitespace-pre-wrap">{lines.join("\n")}</pre><form onSubmit={submit} className="mt-3 flex gap-2"><span className="text-emerald-400">$</span><input aria-label="Terminal command" disabled={!enabled} className="min-w-0 flex-1 bg-transparent text-zinc-200 outline-none" placeholder={enabled ? "Type a command…" : "Take control to use the terminal"} value={input} onChange={e => setInput(e.target.value)} /></form></div>;
 }
-
-function DockItem({ label, active = false, children }: { label: string; active?: boolean; children: React.ReactNode }) {
-  return <button className={`relative flex size-8 items-center justify-center rounded-lg transition-colors ${active ? "bg-white/[0.1] text-zinc-100" : "text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200"}`} title={label} aria-label={label}>{children}{active && <span className="absolute -bottom-0.5 size-1 rounded-full bg-[#db7657]" />}</button>;
+function FileExplorer({ machine, enabled }: { machine: Machine; enabled: boolean }) {
+  const state = useOrbit();
+  const files = state.files[machine.id] ?? {};
+  const [name, setName] = useState(Object.keys(files)[0] ?? "notes.md");
+  const [content, setContent] = useState(files[Object.keys(files)[0]] ?? "");
+  const [feedback, setFeedback] = useState("");
+  const [error, setError] = useState("");
+  return <div className="p-5"><div className="mb-4 flex flex-wrap gap-2">{Object.keys(files).map(file => <button key={file} onClick={() => { setName(file); setContent(files[file]); setFeedback(""); }} className={"rounded-lg px-3 py-2 text-xs " + (file === name ? "bg-white/10 text-zinc-200" : "bg-white/5 text-zinc-500")}>{file}</button>)}<Button variant="ghost" size="sm" disabled={!enabled} onClick={() => { setName("untitled.md"); setContent(""); setFeedback(""); }}>New file</Button></div>
+    <div className="space-y-3"><Field label="Filename"><input className="flow-input" value={name} disabled={!enabled} onChange={e => setName(e.target.value)} /></Field><textarea aria-label="File contents" className="flow-input min-h-64 font-mono !text-xs !leading-6" readOnly={!enabled} value={content} onChange={e => { setContent(e.target.value); setFeedback(""); }} /><ErrorNotice message={error} /><div className="flex items-center gap-3"><Button disabled={!enabled || !name.trim()} onClick={() => { try { orbitActions.saveFile(machine.id, name, content); setError(""); setFeedback("Saved"); } catch (e) { setError((e as Error).message); } }}>Save file</Button><a href={"data:text/plain;charset=utf-8," + encodeURIComponent(content)} download={name} className="text-xs text-zinc-400 underline">Download</a><span role="status" className="text-xs text-emerald-300">{feedback}</span></div>{!enabled && <p className="text-xs text-zinc-600">Take control to edit files.</p>}</div>
+  </div>;
+}
+function DemoBrowser({ enabled }: { enabled: boolean }) {
+  const [url, setUrl] = useState("https://example.com");
+  const [address, setAddress] = useState("https://example.com");
+  const [error, setError] = useState("");
+  return <div className="p-5"><form className="flex gap-2" onSubmit={e => { e.preventDefault(); try { const parsed = new URL(url); if (!["https:", "http:"].includes(parsed.protocol)) throw new Error(); setAddress(parsed.href); setError(""); } catch { setError("Enter an http or https address."); } }}><input aria-label="Browser address" className="flow-input" disabled={!enabled} value={url} onChange={e => setUrl(e.target.value)} /><Button type="submit" disabled={!enabled}>Go</Button></form><ErrorNotice message={error} /><div className="mt-5 rounded-xl bg-[#f4f4f1] p-8 text-[#303030]"><Globe className="size-8" /><h2 className="mt-5 text-xl">Browser preview</h2><p className="mt-3 break-all text-sm">{address}</p><p className="mt-4 max-w-lg text-sm leading-6 text-[#777]">This is the browser surface for your cloud computer. Real pages will stream here when remote sessions are connected. This prototype records the address without navigating your personal browser.</p></div></div>;
 }

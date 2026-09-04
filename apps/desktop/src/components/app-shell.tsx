@@ -6,6 +6,7 @@ import {
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./sidebar";
 import { AgentPanel } from "./agent-panel";
+import { useOrbit } from "@/hooks/use-orbit";
 
 const MIN_CONVERSATION_WIDTH = 400;
 const MAX_CONVERSATION_WIDTH = 680;
@@ -13,13 +14,24 @@ const DEFAULT_CONVERSATION_WIDTH = 480;
 
 export function AppShell() {
   const location = useLocation();
+  const state = useOrbit();
+  const taskId = location.pathname.match(/^\/tasks\/([^/]+)/)?.[1];
+  const task = state.tasks.find(
+    (t) =>
+      t.id === taskId &&
+      state.projects.some(
+        (p) => p.id === t.projectId && p.workspaceId === state.workspaceId,
+      ),
+  );
   const [agentCollapsed, setAgentCollapsed] = useState(false);
   const [conversationWidth, setConversationWidth] = useState(
     DEFAULT_CONVERSATION_WIDTH,
   );
   const dragStart = useRef<{ pointerX: number; width: number } | null>(null);
   const projectId =
-    location.pathname.match(/^\/projects\/([^/]+)/)?.[1] ?? "trace";
+    location.pathname.match(/^\/projects\/([^/]+)/)?.[1] ??
+    task?.projectId ??
+    "";
 
   const resizeConversation = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragStart.current) return;
@@ -39,14 +51,17 @@ export function AppShell() {
 
       <div className="h-full w-full overflow-hidden flex-1">
         <div className="flex min-w-0 flex-1 overflow-hidden h-full">
-          <AgentPanel
-            projectId={projectId}
-            width={conversationWidth}
-            collapsed={agentCollapsed}
-            onToggle={() => setAgentCollapsed((value) => !value)}
-          />
+          {task && (
+            <AgentPanel
+              key={task.id}
+              projectId={projectId}
+              width={conversationWidth}
+              collapsed={agentCollapsed}
+              onToggle={() => setAgentCollapsed((value) => !value)}
+            />
+          )}
 
-          {!agentCollapsed && (
+          {task && !agentCollapsed && (
             <div
               role="separator"
               aria-label="Resize conversation"

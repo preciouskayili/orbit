@@ -5,6 +5,8 @@ function DropdownMenu(props: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root {...props} />;
 }
 
+const DropdownMenuGroup = MenuPrimitive.Group;
+
 function DropdownMenuTrigger(props: MenuPrimitive.Trigger.Props) {
   return <MenuPrimitive.Trigger {...props} />;
 }
@@ -33,6 +35,7 @@ function DropdownMenuSeparator({ className, ...props }: MenuPrimitive.Separator.
 
 export {
   DropdownMenu,
+  DropdownMenuGroup,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuLabel,
