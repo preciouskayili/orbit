@@ -30,6 +30,25 @@ import { useState } from "react";
 function Location() {
   return <output data-testid="location">{useLocation().pathname}</output>;
 }
+test("skills profiles save reusable instructions", async () => {
+  const { SkillsPage } = await import("../src/pages/skills-page");
+  render(<MemoryRouter><SkillsPage /></MemoryRouter>);
+  fireEvent.click(screen.getByRole("button", { name: "New profile" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Careful reviewer" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Instructions" }), { target: { value: "Ask before modifying production files." } });
+  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+  await waitFor(() => expect(getOrbitState().agents.some((a) => a.name === "Careful reviewer" && a.instructions === "Ask before modifying production files.")).toBe(true));
+});
+
+test("Computers is full width while New conversation keeps chat beside the fleet", async () => {
+  const { ComputerFleet } = await import("../src/pages/project-overview-page");
+  render(<MemoryRouter initialEntries={["/computers"]}><Routes><Route element={<AppShell />}><Route path="computers" element={<ComputerFleet />} /><Route path="new" element={<ComputerFleet />} /></Route></Routes></MemoryRouter>);
+  expect(screen.queryByRole("combobox", { name: "Message your agent" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Show chat" })).toBeNull();
+  expect(screen.getAllByText(/vCPU · .* GB memory · .* GB disk/).length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole("link", { name: "New conversation" }));
+  expect(await screen.findByRole("combobox", { name: "Message your agent" })).toBeTruthy();
+});
 beforeEach(() => {
   localStorage.removeItem("orbit.sidebar-collapsed");
   orbitActions.switchWorkspace("personal");
@@ -57,7 +76,7 @@ test("sidebar has only essential navigation, a plus project action, and collapsi
   );
   expect(
     screen.getByRole("navigation", { name: "Main navigation" }).textContent,
-  ).toBe("New conversationComputers");
+  ).toBe("New conversationComputersSkills");
   const add = screen.getByRole("button", { name: "New project" });
   expect(add.textContent).toBe("");
   const project = screen.getAllByRole("button", { expanded: true })[0];
@@ -77,7 +96,7 @@ test("Cmd K searches, Enter navigates, and Escape dismisses", async () => {
   const search = await screen.findByRole("combobox", {
     name: "Search commands",
   });
-  fireEvent.change(search, { target: { value: "Agent skills" } });
+  fireEvent.change(search, { target: { value: "Skills & instructions" } });
   fireEvent.keyDown(search, { key: "Enter" });
   await waitFor(() =>
     expect(screen.getByTestId("location").textContent).toBe("/skills"),
@@ -151,7 +170,7 @@ test("agent can begin a conversation and provision a computer inline", async () 
         .length,
     ).toBe(1),
   );
-  expect(screen.getByTestId("location").textContent).toContain("/computers/");
+  expect(screen.getByTestId("location").textContent).toBe("/sessions/" + conversationId);
   expect(
     screen.getByRole("button", { name: "Run preview", exact: true }),
   ).toBeTruthy();
@@ -260,8 +279,13 @@ test("computer mentions use keyboard selection and ask for permission before att
     storageGb: 80,
   });
   render(
-    <MemoryRouter>
-      <AgentPanel width={480} projectId={projectId} />
+    <MemoryRouter initialEntries={["/projects/" + projectId]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="projects/:projectId" element={<p>Project computers</p>} />
+          <Route path="sessions/:taskId" element={<ConversationWorkspacePage />} />
+        </Route>
+      </Routes>
       <Location />
     </MemoryRouter>,
   );
@@ -295,7 +319,11 @@ test("computer mentions use keyboard selection and ask for permission before att
   expect(getOrbitState().tasks.find((t) => t.id === cid)?.machineIds).toEqual([
     mid,
   ]);
-  expect(screen.getByTestId("location").textContent).toBe("/computers/" + mid);
+  expect(screen.getByTestId("location").textContent).toBe("/sessions/" + cid);
+  expect(screen.getByRole("combobox", { name: "Message your agent" })).toBeTruthy();
+  const tabs = screen.getByRole("navigation", { name: "Session computers" });
+  expect(tabs.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe("/sessions/" + cid + "?computer=" + mid);
+  expect(screen.getByRole("separator", { name: "Resize conversation" })).toBeTruthy();
 });
 
 test("agent responses render markdown and tool details without raw HTML execution", () => {
@@ -402,7 +430,9 @@ test("conversation setup is tucked away without hiding access choices", async ()
   expect(
     await screen.findByRole("combobox", { name: "Computer permissions" }),
   ).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Manage agents" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Skills & instructions" }),
+  ).toBeTruthy();
 });
 
 test("each project can create a session directly and its first message names it", async () => {
@@ -455,7 +485,7 @@ test("computer tabs stay scoped to the current session and keep its conversation
   expect(nav.textContent).not.toContain("Not in session");
   fireEvent.click(nav.querySelectorAll("a")[1]);
   expect(screen.getByTestId("location").textContent).toBe(
-    "/computers/" + ids[1],
+    "/sessions/" + sessionId,
   );
   expect(getOrbitState().activeConversations.personal).toBe(sessionId);
 });
@@ -539,7 +569,7 @@ test("a session without a computer has an actionable empty state and opens its n
   fireEvent.click(
     await screen.findByRole("button", { name: "Create computer", exact: true }),
   );
-  await screen.findByText("Desktop destination");
+  await screen.findByRole("navigation", { name: "Session computers" });
   expect(
     getOrbitState().tasks.find((t) => t.id === id)?.machineIds,
   ).toHaveLength(1);
@@ -617,7 +647,9 @@ test("the plus menu opens the file picker, supports removal, and sends local att
     ).toBe("brief.txt");
   });
   expect(screen.queryByRole("button", { name: "Remove brief.txt" })).toBeNull();
-  expect(screen.getByRole("button", { name: /brief.txt.*Local/ })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Preview brief.txt" }),
+  ).toBeTruthy();
   const id = getOrbitState().activeConversations.personal;
   const attachment = getOrbitState().tasks.find((t) => t.id === id)!.messages[0]
     .attachments![0];
@@ -825,4 +857,55 @@ test("hiding both panels keeps the computer header draggable without covering wi
   expect(
     await screen.findByRole("menuitem", { name: "Rename computer" }),
   ).toBeTruthy();
+});
+
+test("fleet opens a standalone desktop and the plus picker adds computers without duplicates", async () => {
+  const projectId = orbitActions.createProject("Standalone desktop", "");
+  const sessionId = orbitActions.createSession(projectId);
+  const ids = orbitActions.createComputers(
+    { name: "Standalone", os: "ubuntu", cpu: 4, ramGb: 8, storageGb: 80 },
+    2,
+  );
+  orbitActions.attachComputers(sessionId, [ids[0]]);
+  const { ComputerFleet } = await import("../src/pages/project-overview-page");
+  const { MachineWorkspacePage } = await import("../src/pages/machine-workspace-page");
+  render(
+    <MemoryRouter initialEntries={["/computers"]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="computers" element={<ComputerFleet />} />
+          <Route path="computers/:machineId" element={<MachineWorkspacePage />} />
+        </Route>
+      </Routes>
+      <Location />
+    </MemoryRouter>,
+  );
+  const machines = getOrbitState().machines.filter((m) => ids.includes(m.id));
+  fireEvent.click(screen.getByRole("link", { name: "Open " + machines[0].name }));
+  expect(screen.getByTestId("location").textContent).toBe("/computers/" + ids[0]);
+  expect(screen.queryByRole("combobox", { name: "Message your agent" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Show chat" })).toBeNull();
+  const tabs = () => screen.getByRole("navigation", { name: "Workspace computers" });
+  expect(tabs().querySelectorAll("a")).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Open another computer" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(machines[1].name) }));
+  expect(screen.getByTestId("location").textContent).toBe("/computers/" + ids[1]);
+  expect(tabs().querySelectorAll("a")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "Open another computer" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(machines[0].name) }));
+  expect(tabs().querySelectorAll("a")).toHaveLength(2);
+  expect(tabs().querySelector('[aria-current="page"]')?.textContent).toBe(machines[0].name);
+  fireEvent.click(screen.getByRole("button", { name: "Close " + machines[1].name }));
+  expect(tabs().querySelectorAll("a")).toHaveLength(1);
+  expect(screen.getByTestId("location").textContent).toBe("/computers/" + ids[0]);
+  fireEvent.click(screen.getByRole("button", { name: "Open another computer" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(machines[1].name) }));
+  fireEvent.click(screen.getByRole("button", { name: "Close " + machines[1].name }));
+  expect(tabs().querySelectorAll("a")).toHaveLength(1);
+  expect(screen.getByTestId("location").textContent).toBe("/computers/" + ids[0]);
+  fireEvent.click(screen.getByRole("button", { name: "Close " + machines[0].name }));
+  expect(screen.getByTestId("location").textContent).toBe("/computers");
+  expect(screen.getByRole("link", { name: "Open " + machines[0].name })).toBeTruthy();
+  expect(getOrbitState().activeConversations.personal).toBe(sessionId);
+  expect(getOrbitState().tasks.find((t) => t.id === sessionId)?.machineIds).toEqual([ids[0]]);
 });

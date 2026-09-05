@@ -36,7 +36,7 @@ pnpm dev:api                     # independent legacy mock API
 
 ### File attachments
 
-Use **+ → Attach files** to choose files, then remove any unwanted chips before sending. File-only messages are supported. Up to eight files, 10 MB each and 25 MB total, are saved locally in IndexedDB; conversation metadata stays in the existing store. Click a sent attachment to download it. Files are workspace-scoped and are **not uploaded or read by an agent** in this prototype. Replace `lib/chat-attachments.ts` with authenticated object storage when connecting the backend.
+Use **+ → Attach files** to choose files, then remove any unwanted chips before sending. File-only messages are supported. Up to eight files, 10 MB each and 25 MB total, are saved locally in IndexedDB; conversation metadata stays in the existing store. Attachments appear in a compact grid before and after sending. Images open in a popup; PDFs, DOCX, and text files open in a document pane beside chat. PDF previews include page navigation; DOCX previews show text rather than exact Word formatting. Unsupported formats remain downloadable. Files are workspace-scoped and are **not uploaded or read by an agent** in this prototype. Replace `lib/chat-attachments.ts` with authenticated object storage when connecting the backend.
 
 ### Computer mentions and permissions
 
@@ -52,7 +52,7 @@ The demo shell supports `help`, `pwd`, `ls`, `cat <filename>`, `uname`, and `cle
 
 Collapse the sidebar with its top toggle or **⌘\\ / Ctrl+\\**. The sidebar disappears completely; a floating window-control button restores it, and ⌘K search remains available. The layout preference is remembered locally. Empty conversations offer editable starter prompts, and sessions without computers offer inline provisioning.
 
-The sidebar keeps New conversation and Computers, collapsible projects, Recents, and the workspace/profile switcher. The plus beside each project creates a session immediately; the first message names it. Folders start open; clicking anywhere on a folder row opens or closes it. All sessions appear within their project. When a session uses multiple computers, a compact tab strip switches between just those computers. Agent management remains in conversation settings and ⌘K. The right-panel icon at the chat pane’s top-right hides chat, preserving the draft and attachments. When hidden, a visible right-caret remains in a narrow strip at the chat’s collapsed edge, immediately before the workspace. Click it to reopen chat. Opening a session brings chat back. The agent panel persists across pages and resizes with a drag or arrow keys on its separator.
+The sidebar keeps New conversation, Computers, and Skills, collapsible projects, Recents, and the workspace/profile switcher. The plus beside each project creates a session immediately; the first message names it. Folders start open; clicking anywhere on a folder row opens or closes it. All sessions appear within their project. When a session uses multiple computers, a compact tab strip switches between just those computers. Skills & instructions is the shared home for editable instruction profiles and available tools. Computers opens a full-width fleet page with visible OS, CPU, memory, and disk specifications; New conversation keeps the available fleet beside chat. The right-panel icon at the chat pane’s top-right hides chat, preserving the draft and attachments. When hidden, a visible right-caret remains in a narrow strip at the chat’s collapsed edge, immediately before the workspace. Click it to reopen chat. Opening a session brings chat back. The agent panel persists across pages and resizes with a drag or arrow keys on its separator.
 
 ## Code map
 
@@ -66,7 +66,9 @@ apps/desktop/
       agent-panel.tsx           Conversation, one composer, contextual settings
       agent-orb.tsx             Thinking Orbs adapter with reduced-motion support
       session-computer-tabs.tsx Session-scoped computer navigation
-      computer-switcher.tsx     Workspace-wide computer picker
+      attachment-grid.tsx       Compact local file tiles
+      file-preview-pane.tsx     Document pane and image popup
+      pdf-preview.tsx           Lazy PDF rendering and page navigation
       agent-message.tsx         Markdown responses and structured tool cards
       computer-mention-input.tsx Keyboard-accessible @computer suggestions
       command-palette.tsx       Workspace search and keyboard navigation

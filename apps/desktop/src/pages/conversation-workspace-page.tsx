@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useOrbit } from "@/hooks/use-orbit";
 import { ComputerEmptyState } from "@/components/computer-empty-state";
 import { CreateMachineDialog } from "@/components/create-machine-dialog";
@@ -11,6 +11,7 @@ import { MachineViewport } from "@/components/machine-viewport";
 export function ConversationWorkspacePage() {
   const navigate = useNavigate();
   const { taskId } = useParams();
+  const [searchParams] = useSearchParams();
   const state = useOrbit();
   const conversation = state.tasks.find(
     (t) =>
@@ -20,9 +21,8 @@ export function ConversationWorkspacePage() {
       ),
   );
   if (!conversation) return <ComputerFleet />;
-  const machine = state.machines.find((m) =>
-    conversation.machineIds.includes(m.id),
-  );
+  const computers = state.machines.filter((m) => conversation.machineIds.includes(m.id));
+  const machine = computers.find((m) => m.id === searchParams.get("computer")) ?? computers[0];
   if (!machine)
     return (
       <div className="flex h-full flex-col">
@@ -37,7 +37,7 @@ export function ConversationWorkspacePage() {
             <CreateMachineDialog
               onCreated={(ids) => {
                 orbitActions.attachComputers(conversation.id, ids);
-                navigate("/computers/" + ids[0]);
+                navigate("/sessions/" + conversation.id + "?computer=" + ids[0]);
               }}
             />
             <Link

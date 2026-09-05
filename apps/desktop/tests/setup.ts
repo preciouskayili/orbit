@@ -9,10 +9,22 @@ Object.defineProperty(globalThis, "File", {
   configurable: true,
   value: NodeFile,
 });
+import { filePreview } from "../src/lib/file-preview";
 import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  filePreview.close();
+});
+Object.defineProperty(URL, "createObjectURL", {
+  configurable: true,
+  value: vi.fn(() => "blob:local-preview"),
+});
+Object.defineProperty(URL, "revokeObjectURL", {
+  configurable: true,
+  value: vi.fn(),
+});
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockImplementation((query) => ({

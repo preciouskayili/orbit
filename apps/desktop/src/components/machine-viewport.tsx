@@ -3,7 +3,6 @@ import type { Machine } from "@orbit/shared";
 import { useDesktopInteraction } from "@/hooks/use-desktop-interaction";
 import { useOrbit } from "@/hooks/use-orbit";
 import { orbitActions } from "@/lib/orbit-store";
-import { OsLogo } from "@/components/os-logo";
 import { Button } from "@/components/ui/button";
 import { ErrorNotice, Field } from "@/components/flow-ui";
 import {
@@ -20,12 +19,11 @@ import {
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
 import { SessionComputerTabs } from "./session-computer-tabs";
-import { ComputerSwitcher } from "./computer-switcher";
 import { ComputerDesktop } from "./computer-desktop";
 import { Globe, Monitor, DotsThree } from "@/components/ui/icons";
 
 type App = "Desktop" | "Terminal" | "Files" | "Browser";
-export function MachineViewport({ machine }: { machine: Machine }) {
+export function MachineViewport({ machine, openMachineIds, onCloseComputer }: { machine: Machine; openMachineIds?: string[]; onCloseComputer?: (id: string) => void }) {
   const state = useOrbit();
   const [aspect, setAspect] = useState<DesktopAspect>("16:10");
   const [app, setApp] = useState<App>("Desktop");
@@ -46,9 +44,8 @@ export function MachineViewport({ machine }: { machine: Machine }) {
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="window-drag flex min-h-[64px] shrink-0 items-center gap-2 px-4 py-3">
-        <OsLogo os={machine.os} />
-        <div className="min-w-0">
-          <ComputerSwitcher machine={machine} />
+        <div className="min-w-0 flex-1">
+          <SessionComputerTabs machineId={machine.id} openMachineIds={openMachineIds} onCloseComputer={onCloseComputer} />
           <p className="mt-1 text-xs text-zinc-500">
             {human
               ? "You’re interacting · agent yields automatically"
@@ -94,7 +91,6 @@ export function MachineViewport({ machine }: { machine: Machine }) {
           </DropdownMenu>
         </div>
       </div>
-      <SessionComputerTabs machineId={machine.id} />
       {error && (
         <div className="px-5 pb-3">
           <ErrorNotice message={error} />

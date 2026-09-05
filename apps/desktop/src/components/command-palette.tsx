@@ -29,9 +29,7 @@ export function CommandPalette({
   const items = [
     { label: "New conversation", kind: "Action", path: "/new" },
     { label: "All computers", kind: "Navigate", path: "/computers" },
-    { label: "Agents", kind: "Navigate", path: "/agents" },
-    { label: "Scheduled work", kind: "Navigate", path: "/scheduled" },
-    { label: "Agent skills", kind: "Navigate", path: "/skills" },
+    { label: "Skills & instructions", kind: "Navigate", path: "/skills" },
     { label: "Settings & workspaces", kind: "Navigate", path: "/settings" },
     ...projects.map((p) => ({
       label: p.name,

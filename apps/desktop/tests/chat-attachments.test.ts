@@ -46,3 +46,12 @@ test("attachment count and size limits are checked before storing anything", () 
     ]),
   ).toThrow("25 MB");
 });
+
+test("saved attachments reuse their bytes for previews without another storage read", async () => {
+  const file = new File(["preview bytes"], "cached.png", { type: "image/png" });
+  const [attachment] = await saveAttachments("preview-cache", [file]);
+  expect(await loadAttachment("preview-cache", attachment!.id)).toBe(file);
+  expect(await loadAttachment("preview-cache", attachment!.id)).toBe(file);
+  await removeAttachments("preview-cache", [attachment!]);
+  await expect(loadAttachment("preview-cache", attachment!.id)).rejects.toThrow("no longer available");
+});

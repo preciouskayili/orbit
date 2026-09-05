@@ -103,7 +103,7 @@ export function ComputerFleet({ projectId }: { projectId?: string }) {
             return (
               <Link
                 key={machine.id}
-                to={"/computers/" + machine.id}
+                to={project ? "/projects/" + project.id + "/machines/" + machine.id : "/computers/" + machine.id}
                 aria-label={"Open " + machine.name}
                 className="group flex items-center gap-3 rounded-xl bg-white/[0.025] px-4 py-4 transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-500"
                 title={
@@ -128,6 +128,10 @@ export function ComputerFleet({ projectId }: { projectId?: string }) {
                       : state.control[machine.id] === "human"
                         ? "You’re interacting"
                         : machine.osLabel}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-zinc-400">
+                    {machine.osLabel} · {machine.cpu} vCPU · {machine.ramGb} GB
+                    memory · {machine.storageGb} GB disk
                   </p>
                 </div>
                 <StatusBadge status={machine.status} />

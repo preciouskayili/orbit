@@ -20,6 +20,26 @@ export function validateAttachments(files: File[]) {
     throw new Error("Attachments must total 25 MB or less.");
 }
 
+// Keep recently used bytes available for thumbnails and previews, with a fixed
+// memory budget. Workspace IDs are part of every key.
+const cachedBlobs = new Map<string, Blob>();
+const pendingBlobs = new Map<string, Promise<Blob>>();
+const attachmentKey = (workspaceId: string, id: string) => JSON.stringify([workspaceId, id]);
+export function cachedAttachment(workspaceId: string, id: string) {
+  return cachedBlobs.get(attachmentKey(workspaceId, id));
+}
+function cacheAttachment(workspaceId: string, id: string, blob: Blob) {
+  const key = attachmentKey(workspaceId, id);
+  cachedBlobs.delete(key);
+  cachedBlobs.set(key, blob);
+  let bytes = Array.from(cachedBlobs.values()).reduce((total, value) => total + value.size, 0);
+  for (const [oldKey, value] of cachedBlobs) {
+    if (bytes <= MAX_TOTAL_BYTES) break;
+    cachedBlobs.delete(oldKey);
+    bytes -= value.size;
+  }
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("orbit.attachments", 1);
@@ -65,13 +85,14 @@ export async function saveAttachments(
         tx.objectStore("files").put(files[index], [workspaceId, attachment.id]),
       );
     });
+    attachments.forEach((attachment, index) => cacheAttachment(workspaceId, attachment.id, files[index]!));
     return attachments;
   } finally {
     db.close();
   }
 }
 
-export async function loadAttachment(
+async function readAttachment(
   workspaceId: string,
   id: string,
 ): Promise<Blob> {
@@ -98,11 +119,32 @@ export async function loadAttachment(
   }
 }
 
+export async function loadAttachment(workspaceId: string, id: string): Promise<Blob> {
+  const cached = cachedAttachment(workspaceId, id);
+  if (cached) return cached;
+  const key = attachmentKey(workspaceId, id);
+  const pending = pendingBlobs.get(key);
+  if (pending) return pending;
+  const request = readAttachment(workspaceId, id).then((blob) => {
+    if (pendingBlobs.get(key) === request) cacheAttachment(workspaceId, id, blob);
+    return blob;
+  }).finally(() => {
+    if (pendingBlobs.get(key) === request) pendingBlobs.delete(key);
+  });
+  pendingBlobs.set(key, request);
+  return request;
+}
+
 export async function removeAttachments(
   workspaceId: string,
   attachments: ChatAttachment[],
 ) {
   if (!attachments.length) return;
+  attachments.forEach((file) => {
+    const key = attachmentKey(workspaceId, file.id);
+    cachedBlobs.delete(key);
+    pendingBlobs.delete(key);
+  });
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {

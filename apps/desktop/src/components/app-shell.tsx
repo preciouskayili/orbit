@@ -7,6 +7,8 @@ import {
 import { Outlet, useLocation } from "react-router-dom";
 import { WindowToolbar, useWindowNavigation } from "./window-toolbar";
 import { CaretRight } from "./ui/icons";
+import { filePreview, previewKind, useFilePreview } from "@/lib/file-preview";
+import { FilePreviewPane, ImagePreviewDialog } from "./file-preview-pane";
 import { Sidebar } from "./sidebar";
 import { AgentPanel } from "./agent-panel";
 import { orbitActions } from "@/lib/orbit-store";
@@ -19,7 +21,17 @@ const DEFAULT_CONVERSATION_WIDTH = 480;
 export function AppShell() {
   const location = useLocation();
   const navigation = useWindowNavigation();
+  const fullPage =
+    location.pathname.startsWith("/computers/") ||
+    ["/computers", "/skills", "/settings"].includes(location.pathname);
   const state = useOrbit();
+  const selectedFile = useFilePreview();
+  const selection =
+    selectedFile?.workspaceId === state.workspaceId ? selectedFile : null;
+  const documentOpen = selection && previewKind(selection.file) !== "image";
+  useEffect(() => {
+    filePreview.close();
+  }, [location.key, state.workspaceId]);
   const taskId = location.pathname.match(/^\/(?:tasks|sessions)\/([^/]+)/)?.[1];
   const task = state.tasks.find(
     (t) =>
@@ -108,8 +120,8 @@ export function AppShell() {
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <div
             id="chat-panel"
-            hidden={chatHidden}
-            className={chatHidden ? "hidden" : "contents"}
+            hidden={chatHidden || fullPage}
+            className={chatHidden || fullPage ? "hidden" : "contents"}
           >
             <AgentPanel
               projectId={projectId}
@@ -163,7 +175,7 @@ export function AppShell() {
               <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors duration-150 group-hover:bg-zinc-500/60 group-active:bg-zinc-400/70 group-focus-visible:bg-zinc-400/70" />
             </div>
           </div>
-          {chatHidden && (
+          {chatHidden && !fullPage && (
             <div
               aria-label="Collapsed chat"
               className={
@@ -186,17 +198,40 @@ export function AppShell() {
           <main
             className={
               "min-w-0 flex-1 bg-[#171818] " +
-              (sidebarCollapsed && chatHidden
+              (sidebarCollapsed && (chatHidden || fullPage)
                 ? // Move the actual drag rectangle past the floating controls.
                   // Padding still overlaps them; no-drag disables the whole header.
-                  "[&_.window-drag]:ml-[148px]"
+                  fullPage
+                  ? "[&_.window-drag]:ml-[184px]"
+                  : "[&_.window-drag]:ml-[148px]"
                 : "")
             }
           >
-            <Outlet />
+            <div
+              hidden={Boolean(documentOpen)}
+              className={documentOpen ? "hidden" : "h-full"}
+            >
+              <Outlet />
+            </div>
+            {documentOpen && selection && (
+              <FilePreviewPane
+                key={
+                  "id" in selection.file
+                    ? selection.file.id
+                    : selection.file.name
+                }
+                selection={selection}
+              />
+            )}
           </main>
         </div>
       </div>
+      {selection && previewKind(selection.file) === "image" && (
+        <ImagePreviewDialog
+          key={"id" in selection.file ? selection.file.id : selection.file.name}
+          selection={selection}
+        />
+      )}
       {toolbar}
     </div>
   );

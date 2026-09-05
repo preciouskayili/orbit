@@ -15,6 +15,7 @@ import {
   Monitor,
   Plus,
   SquarePen,
+  Sparkle,
 } from "@/components/ui/icons";
 import {
   DropdownMenu,
@@ -39,6 +40,7 @@ import { orbitActions } from "@/lib/orbit-store";
 const navigation = [
   { label: "New conversation", path: "/new", icon: SquarePen },
   { label: "Computers", path: "/computers", icon: Monitor },
+  { label: "Skills", path: "/skills", icon: Sparkle },
 ];
 export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const state = useOrbit();
@@ -85,7 +87,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             <Link
               to="/new"
               onClick={() => orbitActions.newConversation()}
-              className="flex items-center gap-2.5 text-lg font-medium text-zinc-100"
+              className="flex items-center gap-2 text-lg font-bold text-zinc-100"
             >
               <OrbitLogo decorative className="h-6 w-auto shrink-0" />
               Orbit

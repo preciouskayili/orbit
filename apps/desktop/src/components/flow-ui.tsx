@@ -26,7 +26,8 @@ export function Page({
 }) {
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto p-6 mt-12">
+      <div className="window-drag h-[54px] shrink-0" />
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-5xl">
           <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
             <div>

@@ -1,8 +1,9 @@
+import { AttachmentGrid } from "./attachment-grid";
+import { filePreview } from "@/lib/file-preview";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FileText,
-  X,
   ArrowUp,
   DotsThree,
   Monitor,
@@ -40,7 +41,6 @@ import {
   saveAttachments,
   removeAttachments,
   validateAttachments,
-  fileSize,
   type ChatAttachment,
 } from "@/lib/chat-attachments";
 import { orbitActions } from "@/lib/orbit-store";
@@ -150,6 +150,11 @@ export function AgentPanel({
     bottom.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [conversation?.messages.length, conversation?.id]);
   useEffect(() => {
+    const selected = filePreview.get();
+    if (selected && !("id" in selected.file) && !files.includes(selected.file))
+      filePreview.close();
+  }, [files]);
+  useEffect(() => {
     setDraft("");
     setFiles([]);
     setError("");
@@ -176,8 +181,9 @@ export function AgentPanel({
   }
   function attach(ids: string[]) {
     act(() => {
-      orbitActions.attachComputers(ensureConversation(), ids);
-      navigate("/computers/" + ids[0]);
+      const id = ensureConversation();
+      orbitActions.attachComputers(id, ids);
+      navigate("/sessions/" + id + "?computer=" + ids[0]);
     });
   }
   function selectFiles(selected: FileList | null) {
@@ -296,7 +302,7 @@ export function AgentPanel({
               <Button
                 variant="secondary"
                 className="mt-4"
-                onClick={() => navigate("/agents")}
+                onClick={() => navigate("/skills")}
               >
                 Set up an agent
               </Button>
@@ -351,7 +357,7 @@ export function AgentPanel({
                           request.id,
                           true,
                         );
-                        navigate("/computers/" + request.machineId);
+                        navigate("/sessions/" + conversation.id + "?computer=" + request.machineId);
                       })
                     }
                   >
@@ -442,32 +448,18 @@ export function AgentPanel({
             onChange={(event) => selectFiles(event.target.files)}
           />
           {files.length > 0 && (
-            <div className="mb-3 space-y-1.5" aria-label="Pending attachments">
-              {files.map((file, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2 text-xs text-zinc-300"
-                >
-                  <FileText className="size-4 shrink-0 text-zinc-500" />
-                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                  <span className="text-[10px] text-zinc-500">
-                    {fileSize(file.size)}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={"Remove " + file.name}
-                    disabled={sending}
-                    onClick={() =>
-                      setFiles((current) =>
-                        current.filter((_, i) => i !== index),
-                      )
-                    }
-                    className="rounded p-1 hover:bg-white/10"
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ))}
+            <div
+              className="mb-3 max-h-56 space-y-1.5 overflow-y-auto"
+              aria-label="Pending attachments"
+            >
+              <AttachmentGrid
+                files={files}
+                workspaceId={state.workspaceId}
+                disabled={sending}
+                onRemove={(index) =>
+                  setFiles((current) => current.filter((_, i) => i !== index))
+                }
+              />
               <p className="px-1 text-[10px] text-zinc-500">
                 Stored locally · not uploaded to an agent
               </p>
@@ -527,7 +519,7 @@ export function AgentPanel({
                     {computers.map((m) => (
                       <DropdownMenuItem
                         key={m.id}
-                        onClick={() => navigate("/computers/" + m.id)}
+                        onClick={() => navigate("/sessions/" + ensureConversation() + "?computer=" + m.id)}
                       >
                         <OsLogo os={m.os} className="size-4" />
                         {m.name}
@@ -615,7 +607,7 @@ export function AgentPanel({
                 className="w-full"
               />
             </Field>
-            <Field label="Agent">
+            <Field label="Instruction profile">
               <SelectControl
                 label="Agent"
                 value={agentId}
@@ -669,10 +661,10 @@ export function AgentPanel({
               size="sm"
               onClick={() => {
                 setSettingsOpen(false);
-                navigate("/agents");
+                navigate("/skills");
               }}
             >
-              Manage agents
+              Skills & instructions
             </Button>
           </div>
         </DialogContent>
