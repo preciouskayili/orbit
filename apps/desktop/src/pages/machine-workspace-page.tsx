@@ -1,6 +1,5 @@
 import { useParams, Link } from "react-router-dom";
 import { MachineViewport } from "@/components/machine-viewport";
-import { WorkspaceHeader } from "@/components/workspace-header";
 import { useOrbit } from "@/hooks/use-orbit";
 import { workspaceComputers } from "@/lib/orbit-selectors";
 import { Page, Empty } from "@/components/flow-ui";
@@ -21,7 +20,6 @@ export function MachineWorkspacePage() {
     );
   return (
     <div className="flex h-full min-w-0 flex-col bg-[#171818]">
-      <WorkspaceHeader machines={machines} activeMachineId={machineId} />
       <MachineViewport key={machineId} machine={machine} />
     </div>
   );

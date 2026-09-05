@@ -1,270 +1,177 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import type { Machine } from "@orbit/shared";
-import { MagnifyingGlass, Monitor, X } from "@/components/ui/icons";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { SelectControl } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { ComputerCard } from "@/components/computer-card";
 import { CreateMachineDialog } from "@/components/create-machine-dialog";
+import { OsLogo } from "@/components/os-logo";
+import { StatusBadge } from "@/components/status-badge";
+import { ComputerEmptyState } from "@/components/computer-empty-state";
+import { CaretRight } from "@/components/ui/icons";
 import { useOrbit } from "@/hooks/use-orbit";
 import { orbitActions } from "@/lib/orbit-store";
 import { workspaceComputers, projectComputers } from "@/lib/orbit-selectors";
 
-const filters = ["All", "Running", "Stopped", "Needs attention"] as const;
-type Filter = (typeof filters)[number];
-type Sort = "status" | "name" | "recent";
-const statusOrder: Record<Machine["status"], number> = {
-  error: 0,
-  running: 1,
-  starting: 2,
-  stopping: 3,
-  stopped: 4,
-};
-
-function matchesFilter(machine: Machine, filter: Filter) {
-  if (filter === "Running") return machine.status === "running";
-  if (filter === "Stopped") return machine.status === "stopped";
-  if (filter === "Needs attention") return machine.status === "error";
-  return true;
-}
-
+type Filter = "all" | "available" | "used" | "stopped";
 export function ProjectOverviewPage() {
   const { projectId = "" } = useParams();
   return <ComputerFleet key={projectId} projectId={projectId} />;
 }
-
 export function ComputerFleet({ projectId }: { projectId?: string }) {
   const state = useOrbit();
   const navigate = useNavigate();
+  const [filter, setFilter] = useState<Filter>("all");
   const project = state.projects.find(
     (p) => p.id === projectId && p.workspaceId === state.workspaceId,
   );
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("All");
-  const [sort, setSort] = useState<Sort>("status");
-
   const machines = projectId
     ? projectComputers(state, projectId)
     : workspaceComputers(state);
-  const running = machines.filter((machine) => machine.status === "running");
-  const cpu = machines.reduce((total, machine) => total + machine.cpu, 0);
-  const memory = machines.reduce((total, machine) => total + machine.ramGb, 0);
-  const storage = machines.reduce(
-    (total, machine) => total + machine.storageGb,
-    0,
+  const assignment = (id: string) =>
+    state.tasks.find(
+      (t) =>
+        !["completed", "cancelled"].includes(t.status) &&
+        t.machineIds.includes(id),
+    );
+  const visible = machines.filter((m) =>
+    filter === "available"
+      ? !assignment(m.id) &&
+        state.control[m.id] !== "human" &&
+        m.status === "running"
+      : filter === "used"
+        ? Boolean(assignment(m.id))
+        : filter === "stopped"
+          ? m.status === "stopped"
+          : true,
   );
-  const activity = state.activity
-    .filter((a) => machines.some((m) => m.id === a.machineId))
-    .slice()
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  const query = search.trim().toLowerCase();
-  const visible = machines
-    .filter((machine) => matchesFilter(machine, filter))
-    .filter((machine) =>
-      [machine.name, machine.osLabel, machine.id]
-        .join(" ")
-        .toLowerCase()
-        .includes(query),
-    )
-    .sort((a, b) => {
-      if (sort === "name") return a.name.localeCompare(b.name);
-      if (sort === "recent") return b.lastSeenAt.localeCompare(a.lastSeenAt);
-      return (
-        statusOrder[a.status] - statusOrder[b.status] ||
-        a.name.localeCompare(b.name)
-      );
-    });
-
   return (
-    <div className="flex h-full min-w-0 flex-col bg-[#171818]">
-      <header className="window-drag flex h-[54px] shrink-0 items-center gap-2 bg-[#1a1a1a] px-5">
-        <Monitor className="size-4 shrink-0 text-zinc-500" />
-        <span className="truncate text-sm text-zinc-400">
-          {project?.name ??
-            state.workspaces.find((w) => w.id === state.workspaceId)?.name}
-        </span>
-        <span className="text-zinc-600">/</span>
-        <span className="text-sm text-zinc-200">Computers</span>
+    <div className="flex h-full min-w-0 flex-col">
+      <header className="window-drag flex h-[54px] shrink-0 items-center px-5 text-sm text-zinc-500">
+        {project?.name ?? "Computers"}
       </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-medium tracking-tight text-zinc-100">
-                {project ? "Computers in use" : "Your computers"}
-              </h1>
-              <p className="mt-1.5 text-sm leading-5 text-zinc-500">
-                {project
-                  ? "Computers currently attached to this project’s conversations."
-                  : "One shared fleet. Available wherever your work takes you."}
-              </p>
-            </div>
-            {project ? (
+      <div className="min-h-0 flex-1 overflow-auto px-5 pb-6 pt-5">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-medium tracking-tight text-zinc-200">
+              {project ? "Working in this project" : "Your cloud computers"}
+            </h1>
+            <p className="mt-2 text-xs leading-5 text-zinc-500">
+              {project
+                ? "Only computers connected to active conversations."
+                : machines.length +
+                  " computers · " +
+                  machines.filter((m) => m.status === "running").length +
+                  " online"}
+            </p>
+          </div>
+          {project && machines.length > 0 ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                orbitActions.newConversation();
+                navigate("/new?project=" + project.id);
+              }}
+            >
+              New conversation
+            </Button>
+          ) : !project && machines.length > 0 ? (
+            <CreateMachineDialog />
+          ) : null}
+        </div>
+        {machines.length > 0 && (
+          <div className="mb-3 flex justify-end">
+            <SelectControl<Filter>
+              label="Filter computers"
+              value={filter}
+              onValueChange={setFilter}
+              options={[
+                { value: "all", label: "All computers" },
+                { value: "available", label: "Available" },
+                { value: "used", label: "In use" },
+                { value: "stopped", label: "Stopped" },
+              ]}
+              className="!bg-transparent"
+            />
+          </div>
+        )}
+        <div className="space-y-1.5">
+          {visible.map((machine) => {
+            const task = assignment(machine.id);
+            const projectName = state.projects.find(
+              (p) => p.id === task?.projectId,
+            )?.name;
+            return (
+              <Link
+                key={machine.id}
+                to={"/computers/" + machine.id}
+                aria-label={"Open " + machine.name}
+                className="group flex items-center gap-3 rounded-xl bg-white/[0.025] px-4 py-4 transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-500"
+                title={
+                  machine.osLabel +
+                  " · " +
+                  machine.cpu +
+                  " vCPU · " +
+                  machine.ramGb +
+                  " GB memory · " +
+                  machine.storageGb +
+                  " GB disk"
+                }
+              >
+                <OsLogo os={machine.os} className="size-6" />
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-sm text-zinc-200">
+                    {machine.name}
+                  </h2>
+                  <p className="mt-1 truncate text-xs text-zinc-500">
+                    {task
+                      ? projectName + " · " + task.title
+                      : state.control[machine.id] === "human"
+                        ? "You’re interacting"
+                        : machine.osLabel}
+                  </p>
+                </div>
+                <StatusBadge status={machine.status} />
+                <CaretRight className="size-3 text-zinc-600 group-hover:text-zinc-300" />
+              </Link>
+            );
+          })}
+        </div>
+        {!visible.length && (
+          <ComputerEmptyState
+            title={
+              machines.length
+                ? "Nothing in this view"
+                : project
+                  ? "Ready when you are"
+                  : "A computer of their own"
+            }
+            description={
+              machines.length
+                ? "Try a different filter to find a computer in your fleet."
+                : project
+                  ? "Start a conversation and mention a computer. Only the ones you use will appear here."
+                  : "Give your agent a place to build, browse, and test. Your personal machine stays untouched."
+            }
+          >
+            {machines.length ? (
+              <Button variant="secondary" onClick={() => setFilter("all")}>
+                Show all computers
+              </Button>
+            ) : project ? (
               <Button
-                size="sm"
+                variant="secondary"
                 onClick={() => {
                   orbitActions.newConversation();
                   navigate("/new?project=" + project.id);
                 }}
               >
-                Work with agent
+                Start a conversation
               </Button>
             ) : (
               <CreateMachineDialog />
             )}
-          </div>
-
-          <div className="my-6 rounded-2xl bg-[#202121] p-4">
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              <span className="flex items-center gap-2 text-sm text-zinc-200">
-                <span
-                  className={
-                    running.length
-                      ? "size-2 rounded-full bg-emerald-400"
-                      : "size-2 rounded-full bg-zinc-500"
-                  }
-                />
-                {running.length} of {machines.length} online
-              </span>
-              <span className="text-xs text-zinc-500">
-                {
-                  machines.filter((machine) => machine.status === "stopped")
-                    .length
-                }{" "}
-                stopped
-              </span>
-              {machines.some((machine) => machine.status === "error") && (
-                <button
-                  onClick={() => setFilter("Needs attention")}
-                  className="rounded-md bg-rose-400/10 px-2 py-1 text-xs text-rose-300"
-                >
-                  Review errors
-                </button>
-              )}
-            </div>
-            <p className="mt-3 text-xs leading-5 text-zinc-500">
-              Allocated{" "}
-              {project
-                ? "to this project’s active work"
-                : "across your workspace"}{" "}
-              <span className="mx-1 text-zinc-600">·</span>
-              <span className="text-zinc-400">
-                {cpu} vCPU · {memory} GB memory · {storage} GB disk
-              </span>
-            </p>
-          </div>
-
-          <div className="mb-4 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <div className="flex h-9 min-w-[160px] flex-1 items-center gap-2 rounded-lg bg-white/[0.04] px-3 focus-within:ring-2 focus-within:ring-white/20">
-                <MagnifyingGlass className="size-4 shrink-0 text-zinc-500" />
-                <input
-                  aria-label="Search computers"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search name or operating system…"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600"
-                />
-                {search && (
-                  <button
-                    aria-label="Clear search"
-                    onClick={() => setSearch("")}
-                    className="rounded p-1 text-zinc-400 hover:bg-white/10"
-                  >
-                    <X className="size-3" />
-                  </button>
-                )}
-              </div>
-              <SelectControl<Sort>
-                label="Sort computers"
-                value={sort}
-                onValueChange={setSort}
-                options={[
-                  { value: "status", label: "Status first" },
-                  { value: "name", label: "Name A–Z" },
-                  { value: "recent", label: "Last seen" },
-                ]}
-              />
-            </div>
-            <div
-              className="flex flex-wrap items-center gap-1"
-              role="group"
-              aria-label="Filter computers"
-            >
-              {filters.map((option) => (
-                <button
-                  key={option}
-                  aria-pressed={filter === option}
-                  onClick={() => setFilter(option)}
-                  className={`flex h-8 items-center gap-2 rounded-lg px-3 text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400 ${filter === option ? "bg-white/[0.08] text-zinc-200" : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"}`}
-                >
-                  {option}
-                  <span className="text-[11px] text-zinc-500">
-                    {
-                      machines.filter((machine) =>
-                        matchesFilter(machine, option),
-                      ).length
-                    }
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <p className="sr-only" role="status">
-            {visible.length} computers shown
-          </p>
-          {visible.length ? (
-            <div className="fleet-grid">
-              {visible.map((machine) => (
-                <ComputerCard
-                  key={machine.id}
-                  machine={machine}
-                  activity={activity.find(
-                    (event) => event.machineId === machine.id,
-                  )}
-                  activityState="ready"
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-white/[0.025] px-5 py-14 text-center">
-              <Monitor className="mx-auto size-7 text-zinc-600" />
-              <h2 className="mt-4 text-sm font-medium text-zinc-200">
-                {machines.length
-                  ? "No computers match"
-                  : project
-                    ? "No computers in use yet"
-                    : "Your fleet starts here"}
-              </h2>
-              <p className="mt-2 text-sm text-zinc-500">
-                {machines.length
-                  ? "Try another name, operating system, or status."
-                  : project
-                    ? "Mention a computer in your conversation, or attach one from the shared fleet."
-                    : "Create a computer to give your agents a workspace."}
-              </p>
-              {machines.length > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => {
-                    setSearch("");
-                    setFilter("All");
-                  }}
-                >
-                  Clear filters
-                </Button>
-              )}
-            </div>
-          )}
-          <p className="mt-5 text-xs leading-5 text-zinc-600">
-            Open a computer to inspect its workspace. Resource values show
-            allocated capacity.
-          </p>
-        </div>
+          </ComputerEmptyState>
+        )}
       </div>
     </div>
   );

@@ -1,3 +1,5 @@
+import { computerMentionParts, computerMention } from "@/lib/computer-mentions";
+import { workspaceComputers } from "@/lib/orbit-selectors";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Task } from "@/lib/orbit-store";
@@ -7,15 +9,29 @@ import { useOrbit } from "@/hooks/use-orbit";
 export function AgentMessage({
   message,
   agentName,
+  showAuthor = true,
 }: {
   message: Task["messages"][number];
   agentName: string;
+  showAuthor?: boolean;
 }) {
   const state = useOrbit();
   if (message.role === "user")
     return (
       <div className="ml-8 whitespace-pre-wrap break-words rounded-2xl bg-white/[0.065] px-4 py-3 text-sm leading-6 text-zinc-300">
-        {message.content}
+        {computerMentionParts(message.content, workspaceComputers(state)).map(
+          (part, index) =>
+            part.machine ? (
+              <span
+                key={index}
+                className="rounded-md bg-sky-400/10 px-1 py-0.5 text-sky-300"
+              >
+                {computerMention(part.machine)}
+              </span>
+            ) : (
+              part.text
+            ),
+        )}
       </div>
     );
   if (message.tool) {
@@ -26,10 +42,7 @@ export function AgentMessage({
       files: FileText,
     }[tool.name];
     return (
-      <details
-        open
-        className="group overflow-hidden rounded-xl bg-white/[0.035]"
-      >
+      <details className="group overflow-hidden rounded-lg bg-white/[0.025]">
         <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-3 text-xs text-zinc-400">
           <Icon className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{message.content}</span>
@@ -55,7 +68,9 @@ export function AgentMessage({
   }
   return (
     <div className="text-sm leading-6 text-zinc-400">
-      <p className="mb-2 text-xs font-medium text-zinc-200">{agentName}</p>
+      {showAuthor && (
+        <p className="mb-2 text-xs font-medium text-zinc-200">{agentName}</p>
+      )}
       <div className="agent-markdown">
         <Markdown
           remarkPlugins={[remarkGfm]}

@@ -4,9 +4,17 @@ import { cleanup } from "@testing-library/react";
 afterEach(() => cleanup());
 Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false, media: query, onchange: null,
-    addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true; },
+  value: vi.fn().mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener() {},
+    removeListener() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {
+      return true;
+    },
   })),
 });
 globalThis.ResizeObserver = class {
@@ -18,3 +26,6 @@ HTMLElement.prototype.scrollIntoView = function () {};
 HTMLElement.prototype.hasPointerCapture = () => false;
 HTMLElement.prototype.setPointerCapture = function () {};
 HTMLElement.prototype.releasePointerCapture = function () {};
+// jsdom has no raster canvas. The orb renderer handles a missing 2D context.
+HTMLCanvasElement.prototype.getContext = (() =>
+  null) as typeof HTMLCanvasElement.prototype.getContext;

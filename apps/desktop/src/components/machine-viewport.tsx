@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Machine } from "@orbit/shared";
-import { Link } from "react-router-dom";
+import { useDesktopInteraction } from "@/hooks/use-desktop-interaction";
 import { useOrbit } from "@/hooks/use-orbit";
 import { orbitActions } from "@/lib/orbit-store";
 import { OsLogo } from "@/components/os-logo";
@@ -12,7 +12,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { SelectControl } from "./ui/select";
 import { DesktopFrame, type DesktopAspect } from "./desktop-frame";
 import {
   DropdownMenu,
@@ -20,6 +19,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "./ui/dropdown-menu";
+import { SessionComputerTabs } from "./session-computer-tabs";
+import { ComputerSwitcher } from "./computer-switcher";
 import { ComputerDesktop } from "./computer-desktop";
 import { Globe, Monitor, DotsThree } from "@/components/ui/icons";
 
@@ -32,12 +33,8 @@ export function MachineViewport({ machine }: { machine: Machine }) {
   const [rename, setRename] = useState(false);
   const [name, setName] = useState(machine.name);
   const running = machine.status === "running";
+  const interaction = useDesktopInteraction(machine.id, running, setError);
   const human = state.control[machine.id] === "human";
-  const task = state.tasks.find(
-    (t) =>
-      t.machineIds.includes(machine.id) &&
-      !["completed", "cancelled"].includes(t.status),
-  );
   const act = (fn: () => void) => {
     try {
       fn();
@@ -48,12 +45,14 @@ export function MachineViewport({ machine }: { machine: Machine }) {
   };
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2 px-5 py-4">
+      <div className="window-drag flex min-h-[64px] shrink-0 items-center gap-2 px-4 py-3">
         <OsLogo os={machine.os} />
         <div className="min-w-0">
-          <h1 className="text-sm text-zinc-200">{machine.name}</h1>
+          <ComputerSwitcher machine={machine} />
           <p className="mt-1 text-xs text-zinc-500">
-            {machine.osLabel} · {machine.cpu} vCPU · {machine.ramGb} GB memory
+            {human
+              ? "You’re interacting · agent yields automatically"
+              : "Shared desktop · click or type to interact"}
           </p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
@@ -65,6 +64,17 @@ export function MachineViewport({ machine }: { machine: Machine }) {
               <DotsThree className="size-5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
+              <div className="px-2 pb-2 pt-1 text-[11px] text-zinc-500">
+                {machine.osLabel} · {machine.cpu} vCPU · {machine.ramGb} GB
+              </div>
+              {(["16:10", "16:9", "fill"] as DesktopAspect[]).map((value) => (
+                <DropdownMenuItem key={value} onClick={() => setAspect(value)}>
+                  {aspect === value ? "✓ " : ""}
+                  {value === "fill"
+                    ? "Fill available space"
+                    : value + " · fit desktop"}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuItem onClick={() => setRename(true)}>
                 Rename computer
               </DropdownMenuItem>
@@ -82,77 +92,26 @@ export function MachineViewport({ machine }: { machine: Machine }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {running && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() =>
-                act(() =>
-                  orbitActions.setControl(
-                    machine.id,
-                    human ? "agent" : "human",
-                  ),
-                )
-              }
-            >
-              {human ? "Hand back to agent" : "Take control"}
-            </Button>
-          )}
         </div>
       </div>
+      <SessionComputerTabs machineId={machine.id} />
       {error && (
         <div className="px-5 pb-3">
           <ErrorNotice message={error} />
         </div>
       )}
-      {task && (
-        <Link
-          to={"/sessions/" + task.id}
-          onClick={() => orbitActions.openConversation(task.id)}
-          className="mx-5 mb-3 flex flex-wrap gap-2 rounded-lg bg-white/[0.035] px-3 py-2 text-xs text-zinc-400"
-        >
-          <span className="text-[#db7657]">{task.status}</span>
-          <span className="min-w-0 flex-1 truncate">{task.title}</span>
-          <span>Conversation →</span>
-        </Link>
-      )}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 pb-3">
-        <span className="flex items-center gap-2 text-[11px] text-zinc-500">
-          <span
-            className={
-              "size-1.5 rounded-full " +
-              (human ? "bg-sky-300" : "bg-emerald-400")
-            }
-          />
-          {human
-            ? "You have control"
-            : task
-              ? "Agent has control"
-              : "Ready for an agent"}{" "}
-          · Local preview
-        </span>
-        <SelectControl<DesktopAspect>
-          label="Desktop aspect ratio"
-          value={aspect}
-          onValueChange={setAspect}
-          options={[
-            { value: "16:10", label: "16:10 · fit" },
-            { value: "16:9", label: "16:9 · wide" },
-            { value: "fill", label: "Fill available space" },
-          ]}
-          className="!h-7 !bg-transparent !text-[11px]"
-        />
-      </div>
       <DesktopFrame aspect={aspect}>
-        <ComputerDesktop machine={machine} app={app} openApp={setApp}>
-          {app === "Terminal" ? (
-            <DemoTerminal machine={machine} enabled={human && running} />
-          ) : app === "Files" ? (
-            <FileExplorer machine={machine} enabled={human && running} />
-          ) : (
-            <DemoBrowser enabled={human && running} />
-          )}
-        </ComputerDesktop>
+        <div {...interaction} className="h-full">
+          <ComputerDesktop machine={machine} app={app} openApp={setApp}>
+            {app === "Terminal" ? (
+              <DemoTerminal machine={machine} enabled={running} />
+            ) : app === "Files" ? (
+              <FileExplorer machine={machine} enabled={running} />
+            ) : (
+              <DemoBrowser enabled={running} />
+            )}
+          </ComputerDesktop>
+        </div>
         {!running && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 p-6 text-center backdrop-blur-sm">
             <Monitor className="size-7 text-zinc-500" />
@@ -253,7 +212,9 @@ function DemoTerminal({
           disabled={!enabled}
           className="min-w-0 flex-1 bg-transparent text-zinc-200 outline-none"
           placeholder={
-            enabled ? "Type a command…" : "Take control to use the terminal"
+            enabled
+              ? "Type a command…"
+              : "Start the computer to use the terminal"
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -360,7 +321,9 @@ function FileExplorer({
           </span>
         </div>
         {!enabled && (
-          <p className="text-xs text-zinc-600">Take control to edit files.</p>
+          <p className="text-xs text-zinc-600">
+            Start the computer to edit files.
+          </p>
         )}
       </div>
     </div>

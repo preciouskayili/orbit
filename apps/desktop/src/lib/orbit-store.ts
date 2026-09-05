@@ -135,7 +135,7 @@ function restore(): OrbitState {
       return initialState();
     }
     const result = stateSchema.safeParse(decoded);
-    if (result.success) return result.data;
+    if (result.success) return { ...result.data, control: {} }; // Desktop input locks are transient.
     persistenceError =
       "Saved prototype data could not be loaded. This session is using sample data.";
   } catch {
@@ -238,7 +238,9 @@ function startTask(
       "One of these computers is assigned to an unfinished task. Finish or cancel that task first.",
     );
   if (ids.some((mid) => draft.control[mid] === "human"))
-    throw new Error("Hand control back to the agent before starting a task.");
+    throw new Error(
+      "Wait for the current desktop interaction to finish before starting.",
+    );
   const task: Task = {
     id: id(),
     projectId: input.projectId,
@@ -395,7 +397,61 @@ function provision(
   }
   return created;
 }
+// Ephemeral desktop-input leases are not persisted and never authorize a cloud
+// operation. The backend must enforce the same coordination per remote session.
+const inputLeases = new Map<string, { token: string }>();
+const inputPausedRuns = new Set<string>();
 export const orbitActions = {
+  beginInteraction(machineId: string) {
+    const machine = machineInWorkspace(state, machineId);
+    if (machine.status !== "running")
+      throw new Error("Start the computer first.");
+    const existing = inputLeases.get(machineId);
+    if (existing) return existing.token;
+    const token = id();
+    const pausedIds = state.tasks
+      .filter((t) => t.status === "running" && t.machineIds.includes(machineId))
+      .map((t) => t.id);
+    update((d) => {
+      d.control[machineId] = "human";
+      d.tasks
+        .filter((t) => pausedIds.includes(t.id))
+        .forEach((t) => {
+          t.status = "paused";
+        });
+    });
+    pausedIds.forEach((taskId) => inputPausedRuns.add(taskId));
+    inputLeases.set(machineId, { token });
+    return token;
+  },
+  endInteraction(machineId: string, token: string) {
+    const lease = inputLeases.get(machineId);
+    if (!lease || lease.token !== token) return;
+    inputLeases.delete(machineId);
+    // This token can only release the lease that the current UI acquired,
+    // including during workspace-switch cleanup; it cannot acquire new access.
+    update((d) => {
+      d.control[machineId] = "agent";
+      d.tasks
+        .filter((t) => inputPausedRuns.has(t.id))
+        .forEach((t) => {
+          if (t.status !== "paused") {
+            inputPausedRuns.delete(t.id);
+            return;
+          }
+          if (
+            t.machineIds.every(
+              (mid) =>
+                d.control[mid] !== "human" &&
+                d.machines.find((m) => m.id === mid)?.status === "running",
+            )
+          ) {
+            t.status = "running";
+            inputPausedRuns.delete(t.id);
+          }
+        });
+    });
+  },
   switchWorkspace(workspaceId: string) {
     update((d) => {
       if (!d.workspaces.some((w) => w.id === workspaceId))
@@ -538,7 +594,9 @@ export const orbitActions = {
         machine.status !== "running" ||
         d.control[machineId] !== "human"
       )
-        throw new Error("Start the computer and take control to edit files.");
+        throw new Error(
+          "Start the computer and interact with its desktop to edit files.",
+        );
       machineInWorkspace(d, machine.id);
       if (!name.trim()) throw new Error("Enter a filename.");
       d.files[machineId] ??= {};
@@ -573,6 +631,32 @@ export const orbitActions = {
     update((d) => {
       delete d.activeConversations[d.workspaceId];
     });
+  },
+  createSession(projectId: string) {
+    const sessionId = id();
+    update((d) => {
+      projectInWorkspace(d, projectId);
+      const agent = d.agents.find((a) => a.workspaceId === d.workspaceId);
+      if (!agent) throw new Error("Create an agent in this workspace first.");
+      d.tasks.unshift({
+        id: sessionId,
+        projectId,
+        agentId: agent.id,
+        title: "New session",
+        prompt: "",
+        machineIds: [],
+        computerAccess: "ask",
+        requests: [],
+        status: "paused",
+        step: 0,
+        createdAt: now(),
+        events: [],
+        artifacts: [],
+        messages: [],
+      });
+      d.activeConversations[d.workspaceId] = sessionId;
+    });
+    return sessionId;
   },
   createConversation(
     projectId: string,
@@ -653,7 +737,7 @@ export const orbitActions = {
             added
               .map((mid) => d.machines.find((m) => m.id === mid)!.name)
               .join(", ") +
-            ". Open a desktop to follow along. Start stopped computers and hand control back before continuing.",
+            ". Open a desktop to follow along. Start stopped computers to continue. You can interact directly whenever you need.",
         });
         conversation.events.push({
           title: "Computers attached",
@@ -683,6 +767,10 @@ export const orbitActions = {
     update((d) => {
       const task = taskInWorkspace(d, taskId);
       if (!content.trim()) return;
+      if (!task.prompt) {
+        task.prompt = content.trim();
+        task.title = content.trim().slice(0, 65);
+      }
       task.messages.push({ role: "user", content: content.trim() });
       mentionedComputerIds.forEach((mid) => requestComputer(d, task, mid));
       if (
@@ -790,7 +878,7 @@ export const orbitActions = {
           )
         )
           throw new Error(
-            "Start all assigned computers and return control to the agent first.",
+            "Start all assigned computers and finish interacting with their desktops first.",
           );
         task.status = "running";
       } else if (action === "advance" && task.status === "running") {

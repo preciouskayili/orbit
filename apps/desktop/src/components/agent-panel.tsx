@@ -1,30 +1,41 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  CaretRight,
-  SidebarSimple,
-  Robot,
   ArrowUp,
-  Plus,
+  CaretRight,
+  DotsThree,
   Monitor,
-  ChatCircleDots,
-} from "@/components/ui/icons";
-import { Button } from "@/components/ui/button";
-import { SelectControl } from "@/components/ui/select";
+  Plus,
+  Robot,
+  SidebarSimple,
+} from "./ui/icons";
+import { Button } from "./ui/button";
+import { SelectControl } from "./ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "./ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
 import { CreateMachineDialog } from "./create-machine-dialog";
-import { CreateContainer, ErrorNotice } from "./flow-ui";
+import { CreateContainer, ErrorNotice, Field } from "./flow-ui";
 import { OsLogo } from "./os-logo";
-import { workspaceComputers } from "@/lib/orbit-selectors";
-import { mentionedComputers } from "@/lib/computer-mentions";
 import { ComputerMentionInput } from "./computer-mention-input";
 import { AgentMessage } from "./agent-message";
+import { AgentWelcome } from "./agent-welcome";
+import { AgentOrb } from "./agent-orb";
 import { useOrbit } from "@/hooks/use-orbit";
+import { useAgentPreview } from "@/hooks/use-agent-preview";
+import { workspaceComputers } from "@/lib/orbit-selectors";
+import { mentionedComputers } from "@/lib/computer-mentions";
 import { orbitActions } from "@/lib/orbit-store";
 
 export function AgentPanel({
@@ -38,6 +49,7 @@ export function AgentPanel({
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  const composer = useRef<HTMLTextAreaElement>(null);
   const state = useOrbit();
   const navigate = useNavigate();
   const projects = state.projects.filter(
@@ -55,6 +67,8 @@ export function AgentPanel({
   const [chosenAgent, setChosenAgent] = useState("");
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const projectId =
     conversation?.projectId ??
@@ -67,21 +81,46 @@ export function AgentPanel({
     agents.find((a) => a.id === chosenAgent)?.id ??
     agents[0]?.id ??
     "";
-  const computers = state.machines.filter((m) =>
+  const agentName = agents.find((a) => a.id === agentId)?.name ?? "Orbit agent";
+  const allComputers = workspaceComputers(state);
+  const computers = allComputers.filter((m) =>
     conversation?.machineIds.includes(m.id),
   );
-  const ended =
-    conversation && ["completed", "cancelled"].includes(conversation.status);
-  const allComputers = workspaceComputers(state);
   const available = allComputers.filter(
     (m) =>
-      !conversation?.machineIds.includes(m.id) &&
       !state.tasks.some(
         (t) =>
           ["running", "paused", "review"].includes(t.status) &&
           t.machineIds.includes(m.id),
       ),
   );
+  const interacting = computers.some((m) => state.control[m.id] === "human");
+  const ended = Boolean(
+    conversation && ["completed", "cancelled"].includes(conversation.status),
+  );
+  const pending =
+    conversation?.requests.filter((r) => r.status === "pending") ?? [];
+  const preview = useAgentPreview(conversation, setError);
+  const status = interacting
+    ? "You’re interacting · agent is waiting"
+    : preview.playing
+      ? {
+          working: "Preparing computers",
+          searching: "Searching",
+          composing: "Collecting results",
+        }[preview.phase as "working" | "searching" | "composing"] + " · preview"
+      : pending.length
+        ? "Waiting for permission"
+        : conversation?.status === "review"
+          ? "Ready for your review"
+          : ended
+            ? "Run finished · computers retained"
+            : computers.length
+              ? computers.length +
+                (computers.length === 1
+                  ? " computer connected"
+                  : " computers connected")
+              : "Mention a computer, or add one below";
 
   useEffect(() => {
     bottom.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
@@ -89,6 +128,8 @@ export function AgentPanel({
   useEffect(() => {
     setDraft("");
     setError("");
+    setSettingsOpen(false);
+    setCreateOpen(false);
   }, [conversation?.id, state.workspaceId]);
   function act(fn: () => void) {
     try {
@@ -98,37 +139,37 @@ export function AgentPanel({
       setError((e as Error).message);
     }
   }
+  function ensureConversation() {
+    return (
+      conversation?.id ??
+      orbitActions.createConversation(
+        projectId,
+        agentId,
+        "Let’s set up a computer for our work.",
+      )
+    );
+  }
   function attach(ids: string[]) {
     act(() => {
-      const id =
-        conversation?.id ??
-        orbitActions.createConversation(
-          projectId,
-          agentId,
-          "Let’s set up computers for this project.",
-        );
-      orbitActions.attachComputers(id, ids);
+      orbitActions.attachComputers(ensureConversation(), ids);
       navigate("/computers/" + ids[0]);
     });
   }
   function send() {
     act(() => {
-      if (!draft.trim()) return;
-      if (conversation)
-        orbitActions.message(
-          conversation.id,
-          draft,
-          mentionedComputers(draft, allComputers),
+      if (!draft.trim() || !projectId || !agentId) return;
+      const mentions = mentionedComputers(draft, allComputers);
+      if (conversation) orbitActions.message(conversation.id, draft, mentions);
+      else
+        navigate(
+          "/sessions/" +
+            orbitActions.createConversation(
+              projectId,
+              agentId,
+              draft,
+              mentions,
+            ),
         );
-      else {
-        const id = orbitActions.createConversation(
-          projectId,
-          agentId,
-          draft,
-          mentionedComputers(draft, allComputers),
-        );
-        navigate("/sessions/" + id);
-      }
       setDraft("");
     });
   }
@@ -150,22 +191,20 @@ export function AgentPanel({
       style={{ width }}
       className="flex min-h-0 min-w-[360px] shrink-0 flex-col bg-[#181818]"
     >
-      <header className="window-drag flex h-[54px] shrink-0 items-center gap-2 px-4">
-        <Robot className="size-4 text-[#db7657]" />
-        <span className="truncate text-sm text-zinc-300">
-          {agents.find((a) => a.id === agentId)?.name ?? "Your agent"}
+      <header className="window-drag flex h-[54px] shrink-0 items-center gap-2.5 px-4">
+        {conversation && (
+          <AgentOrb phase={interacting ? "waiting" : preview.phase} />
+        )}
+        <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">
+          {conversation ? agentName : "Agent"}
         </span>
         <Button
           variant="ghost"
           size="icon-sm"
-          className="ml-auto"
-          onClick={() => {
-            orbitActions.newConversation();
-            navigate("/new");
-          }}
-          aria-label="New conversation"
+          aria-label="Conversation settings"
+          onClick={() => setSettingsOpen(true)}
         >
-          <Plus className="size-4" />
+          <DotsThree className="size-5" />
         </Button>
         <Button
           variant="ghost"
@@ -177,36 +216,18 @@ export function AgentPanel({
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-        {!conversation ? (
-          <div className="flex min-h-full flex-col justify-center py-8">
-            <ChatCircleDots className="mb-5 size-7 text-zinc-500" />
-            <h1 className="text-[22px] font-medium tracking-tight text-zinc-200">
-              What are we working on?
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
-              Work with your agent. Give it a computer when it needs one, follow
-              along, or take over at any time.
-            </p>
-            <div className="mt-7 space-y-2">
-              {[
-                "Build and test a web app",
-                "Research a market together",
-                "Check my app across operating systems",
-              ].map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => setDraft(prompt)}
-                  className="flex w-full items-center justify-between gap-2 rounded-xl bg-white/[0.035] px-4 py-3 text-left text-xs text-zinc-400 hover:bg-white/[0.07]"
-                >
-                  {prompt}
-                  <CaretRight className="size-3 shrink-0 text-zinc-600" />
-                </button>
-              ))}
-            </div>
+        {!conversation?.messages.length ? (
+          <div className="flex min-h-full flex-col justify-center py-10">
+            <AgentWelcome
+              onChoose={(prompt) => {
+                setDraft(prompt);
+                requestAnimationFrame(() => composer.current?.focus());
+              }}
+            />
             {!projects.length && (
               <div className="mt-6">
                 <p className="mb-3 text-xs text-zinc-500">
-                  Create a project to give this conversation a home.
+                  Create a project to get started.
                 </p>
                 <CreateContainer kind="project" />
               </div>
@@ -223,7 +244,7 @@ export function AgentPanel({
           </div>
         ) : (
           <div
-            className="space-y-6 pt-5"
+            className="space-y-5 pt-5"
             role="log"
             aria-label="Agent conversation"
           >
@@ -231,57 +252,62 @@ export function AgentPanel({
               <AgentMessage
                 key={index}
                 message={message}
-                agentName={
-                  agents.find((a) => a.id === agentId)?.name ?? "Orbit agent"
+                agentName={agentName}
+                showAuthor={
+                  index === 0 ||
+                  conversation.messages[index - 1]?.role === "user"
                 }
               />
             ))}
-            {conversation.requests
-              .filter((r) => r.status === "pending")
-              .map((request) => (
-                <div key={request.id} className="rounded-xl bg-[#2c2c2c] p-4">
+            {pending.map((request) => (
+              <div key={request.id} className="rounded-xl bg-white/[0.055] p-4">
+                <div className="flex items-center gap-2">
+                  <Monitor className="size-4 text-zinc-500" />
                   <p className="text-sm text-zinc-200">
-                    Allow computer access?
+                    Use{" "}
+                    {allComputers.find((m) => m.id === request.machineId)?.name}
+                    ?
                   </p>
-                  <p className="mt-2 text-xs leading-5 text-zinc-400">
-                    Let this agent use{" "}
-                    {allComputers.find((m) => m.id === request.machineId)?.name}{" "}
-                    for this conversation. You can take over at any time.
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        act(() => {
-                          orbitActions.resolveComputerRequest(
-                            conversation.id,
-                            request.id,
-                            true,
-                          );
-                          navigate("/computers/" + request.machineId);
-                        })
-                      }
-                    >
-                      Allow this conversation
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        act(() =>
-                          orbitActions.resolveComputerRequest(
-                            conversation.id,
-                            request.id,
-                            false,
-                          ),
-                        )
-                      }
-                    >
-                      Deny
-                    </Button>
-                  </div>
                 </div>
-              ))}
+                <p className="mt-2 text-xs leading-5 text-zinc-500">
+                  Access for this conversation. You can work alongside the
+                  agent.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    aria-label="Allow this conversation"
+                    onClick={() =>
+                      act(() => {
+                        orbitActions.resolveComputerRequest(
+                          conversation.id,
+                          request.id,
+                          true,
+                        );
+                        navigate("/computers/" + request.machineId);
+                      })
+                    }
+                  >
+                    Allow
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      act(() =>
+                        orbitActions.resolveComputerRequest(
+                          conversation.id,
+                          request.id,
+                          false,
+                        ),
+                      )
+                    }
+                  >
+                    Deny
+                  </Button>
+                </div>
+              </div>
+            ))}
             {conversation.artifacts.map((file) => (
               <a
                 key={file.name}
@@ -290,103 +316,29 @@ export function AgentPanel({
                   "data:text/plain;charset=utf-8," +
                   encodeURIComponent(file.content)
                 }
-                className="block rounded-xl bg-white/5 p-4 text-xs text-zinc-300"
+                className="block rounded-lg bg-white/[0.035] p-3 text-xs text-zinc-400"
               >
                 ↓ {file.name}
-                <span className="mt-1 block text-zinc-500">
-                  Download demo result
-                </span>
               </a>
             ))}
           </div>
         )}
         <div ref={bottom} />
       </div>
-      <div className="shrink-0 space-y-3 px-4 pb-4">
-        {conversation && !ended && (
-          <SelectControl
-            label="Computer permissions"
-            value={conversation.computerAccess}
-            onValueChange={(access) =>
-              act(() => orbitActions.setComputerAccess(conversation.id, access))
-            }
-            options={[
-              { value: "ask", label: "Ask before using computers" },
-              {
-                value: "workspace",
-                label: "Allow available workspace computers",
-              },
-            ]}
-            className="w-full !bg-transparent !text-[11px]"
-          />
-        )}
-        {computers.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {computers.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => navigate("/computers/" + m.id)}
-                className="flex shrink-0 items-center gap-2 rounded-lg bg-white/[0.045] px-3 py-2 text-xs text-zinc-400 hover:bg-white/[0.08]"
-              >
-                <OsLogo os={m.os} className="size-3.5" />
-                {m.name}
-                <span
-                  className={
-                    "size-1.5 rounded-full " +
-                    (m.status === "running" ? "bg-emerald-400" : "bg-zinc-600")
-                  }
-                />
-              </button>
-            ))}
-          </div>
-        )}
-        {conversation && !ended && (
-          <div className="flex flex-wrap items-center gap-2 px-1">
-            <span className="mr-auto text-[11px] text-zinc-500">
-              {!computers.length
-                ? "No computers attached"
-                : conversation.status === "review"
-                  ? "Ready for your review"
-                  : conversation.status === "paused"
-                    ? "Agent paused"
-                    : "Demo run ready"}
+      <div className="shrink-0 space-y-2 px-4 pb-4">
+        {conversation && (
+          <div className="flex min-h-9 items-center gap-2 px-1">
+            <span
+              role="status"
+              className="min-w-0 flex-1 text-[11px] text-zinc-500"
+            >
+              {status}
             </span>
-            {conversation.status === "running" && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    act(() => orbitActions.taskAction(conversation.id, "pause"))
-                  }
-                >
-                  Pause
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    act(() =>
-                      orbitActions.taskAction(conversation.id, "advance"),
-                    )
-                  }
-                >
-                  Preview next step
-                </Button>
-              </>
-            )}
-            {conversation.status === "paused" && computers.length > 0 && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() =>
-                  act(() => orbitActions.taskAction(conversation.id, "resume"))
-                }
-              >
-                Continue
+            {preview.playing ? (
+              <Button size="sm" variant="ghost" onClick={preview.pause}>
+                Pause
               </Button>
-            )}
-            {conversation.status === "review" && (
+            ) : conversation.status === "review" ? (
               <Button
                 size="sm"
                 onClick={() =>
@@ -395,25 +347,14 @@ export function AgentPanel({
               >
                 Approve result
               </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button variant="ghost" size="sm" />}
-              >
-                More
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top">
-                <DropdownMenuItem
-                  onClick={() =>
-                    act(() =>
-                      orbitActions.taskAction(conversation.id, "cancel"),
-                    )
-                  }
-                >
-                  End run · retain computers
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            ) : !ended &&
+              !interacting &&
+              computers.length > 0 &&
+              pending.length === 0 ? (
+              <Button size="sm" variant="secondary" onClick={preview.start}>
+                Run preview
+              </Button>
+            ) : null}
           </div>
         )}
         <ErrorNotice message={error} />
@@ -425,23 +366,82 @@ export function AgentPanel({
           }}
         >
           <ComputerMentionInput
+            inputRef={composer}
             value={draft}
             onChange={setDraft}
             onSend={send}
             computers={allComputers}
           />
           <div className="flex items-center gap-2">
-            {!conversation && (
-              <SelectControl
-                label="Agent"
-                value={agentId}
-                onValueChange={setChosenAgent}
-                options={agents.map((a) => ({ value: a.id, label: a.name }))}
-                className="max-w-[160px] !bg-transparent !px-1"
-              />
-            )}
-            <span className="text-[10px] text-zinc-500">
-              {conversation ? "Conversation saved locally" : "Local preview"}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={!projectId || !agentId || ended}
+                  />
+                }
+                aria-label="Add computer"
+              >
+                <Plus className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" className="w-64">
+                <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+                  <Plus className="size-4" />
+                  New computer
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    act(() =>
+                      orbitActions.requestAvailableComputer(
+                        ensureConversation(),
+                      ),
+                    )
+                  }
+                >
+                  <Robot className="size-4" />
+                  Let agent choose
+                </DropdownMenuItem>
+                {computers.length > 0 && (
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Connected</DropdownMenuLabel>
+                    {computers.map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onClick={() => navigate("/computers/" + m.id)}
+                      >
+                        <OsLogo os={m.os} className="size-4" />
+                        {m.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                )}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Available computers</DropdownMenuLabel>
+                  {available.length ? (
+                    available.map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onClick={() => attach([m.id])}
+                      >
+                        <OsLogo os={m.os} className="size-4" />
+                        <span className="truncate">{m.name}</span>
+                      </DropdownMenuItem>
+                    ))
+                  ) : (
+                    <DropdownMenuItem disabled>
+                      No available computers
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span className="min-w-0 truncate text-[11px] text-zinc-500">
+              {projects.find((p) => p.id === projectId)?.name ?? "No project"}
+              {conversation?.computerAccess === "workspace" && (
+                <span className="ml-2 text-amber-200/70">Auto access on</span>
+              )}
             </span>
             <Button
               type="submit"
@@ -454,82 +454,95 @@ export function AgentPanel({
             </Button>
           </div>
         </form>
-        <div className="flex flex-wrap items-center gap-2">
-          {!conversation && projects.length > 0 && (
-            <SelectControl
-              label="Conversation project"
-              value={projectId}
-              onValueChange={setChosenProject}
-              options={projects.map((p) => ({ value: p.id, label: p.name }))}
-              className="max-w-[140px] !bg-transparent"
-            />
-          )}
-          {conversation && (
-            <span className="mr-auto max-w-[120px] truncate px-1 text-xs text-zinc-500">
-              {projects.find((p) => p.id === projectId)?.name}
-            </span>
-          )}
-          {projectId && agentId && !ended && (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={<Button variant="ghost" size="sm" />}
+        <p className="text-center text-[10px] text-zinc-600">
+          Local preview · cloud execution not connected
+        </p>
+      </div>
+      <CreateMachineDialog
+        hideTrigger
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={attach}
+      />
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="p-6">
+          <DialogTitle>Conversation settings</DialogTitle>
+          <DialogDescription className="mt-2">
+            Keep the conversation simple. Adjust its context here.
+          </DialogDescription>
+          <div className="mt-5 space-y-4">
+            <Field label="Project">
+              <SelectControl
+                label="Conversation project"
+                value={projectId}
+                onValueChange={setChosenProject}
+                options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                disabled={Boolean(conversation)}
+                className="w-full"
+              />
+            </Field>
+            <Field label="Agent">
+              <SelectControl
+                label="Agent"
+                value={agentId}
+                onValueChange={setChosenAgent}
+                options={agents.map((a) => ({ value: a.id, label: a.name }))}
+                disabled={Boolean(conversation)}
+                className="w-full"
+              />
+            </Field>
+            {conversation && !ended && (
+              <>
+                <Field label="Computer access">
+                  <SelectControl
+                    label="Computer permissions"
+                    value={conversation.computerAccess}
+                    onValueChange={(access) =>
+                      act(() =>
+                        orbitActions.setComputerAccess(conversation.id, access),
+                      )
+                    }
+                    options={[
+                      { value: "ask", label: "Ask before using a computer" },
+                      {
+                        value: "workspace",
+                        label: "Allow available workspace computers",
+                      },
+                    ]}
+                    className="w-full"
+                  />
+                </Field>
+                <p className="text-xs leading-5 text-zinc-500">
+                  Autonomous access applies only to this conversation.
+                  Human-controlled and busy computers are protected.
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    act(() => {
+                      orbitActions.taskAction(conversation.id, "cancel");
+                      setSettingsOpen(false);
+                    })
+                  }
                 >
-                  <Monitor className="mr-1 size-3.5" />
-                  Attach
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" className="w-64">
-                  {conversation && (
-                    <DropdownMenuItem
-                      onClick={() =>
-                        act(() =>
-                          orbitActions.requestAvailableComputer(
-                            conversation.id,
-                          ),
-                        )
-                      }
-                    >
-                      <Robot className="size-4" />
-                      Let agent choose
-                    </DropdownMenuItem>
-                  )}
-                  {available.length ? (
-                    available.map((m) => (
-                      <DropdownMenuItem
-                        key={m.id}
-                        onClick={() => attach([m.id])}
-                      >
-                        <OsLogo os={m.os} className="size-4" />
-                        <span className="flex-1 truncate">{m.name}</span>
-                        <span className="text-[10px] text-zinc-500">
-                          {m.status}
-                        </span>
-                      </DropdownMenuItem>
-                    ))
-                  ) : (
-                    <DropdownMenuItem disabled>
-                      No available computers
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <CreateMachineDialog onCreated={attach} />
-            </>
-          )}
-          {ended && (
+                  End run · keep computers
+                </Button>
+              </>
+            )}
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={() => {
-                orbitActions.newConversation();
-                navigate("/new");
+                setSettingsOpen(false);
+                navigate("/agents");
               }}
             >
-              New conversation
+              Manage agents
             </Button>
-          )}
-        </div>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

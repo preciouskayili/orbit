@@ -51,7 +51,7 @@ test("human takeover pauses the agent; files survive stopping and resuming", () 
   actions.setControl(mid, "human");
   expect(store.getOrbitState().tasks[0].status).toBe("paused");
   expect(() => actions.taskAction(conversationId, "resume")).toThrow(
-    "return control",
+    "finish interacting",
   );
   actions.saveFile(mid, "notes.md", "Keep this.");
   actions.machineStatus(mid, "stopped");
@@ -190,4 +190,48 @@ test("agent can select an available computer under an explicit conversation perm
   store.orbitActions.requestAvailableComputer(conversationId);
   expect(store.getOrbitState().tasks[0].machineIds.length).toBe(1);
   expect(store.getOrbitState().tasks[0].requests).toEqual([]);
+});
+
+test("direct input yields and resumes automatically without overriding an intentional pause", () => {
+  const { projectId, conversationId } = setup();
+  const a = store.orbitActions;
+  const [mid] = a.createComputers(input);
+  a.attachComputers(conversationId, [mid]);
+  a.taskAction(conversationId, "resume");
+  const token = a.beginInteraction(mid);
+  expect(store.getOrbitState().tasks[0].status).toBe("paused");
+  expect(store.getOrbitState().control[mid]).toBe("human");
+  a.endInteraction(mid, "wrong-token");
+  expect(store.getOrbitState().control[mid]).toBe("human");
+  a.endInteraction(mid, token);
+  expect(store.getOrbitState().tasks[0].status).toBe("running");
+  a.taskAction(conversationId, "pause");
+  const next = a.beginInteraction(mid);
+  a.endInteraction(mid, next);
+  expect(store.getOrbitState().tasks[0].status).toBe("paused");
+});
+
+test("a fleet resumes only once all simultaneous desktop interactions finish", () => {
+  const { conversationId } = setup();
+  const a = store.orbitActions;
+  const [first, second] = a.createComputers(input, 2);
+  a.attachComputers(conversationId, [first, second]);
+  a.taskAction(conversationId, "resume");
+  const one = a.beginInteraction(first);
+  const two = a.beginInteraction(second);
+  a.endInteraction(first, one);
+  expect(store.getOrbitState().tasks[0].status).toBe("paused");
+  a.endInteraction(second, two);
+  expect(store.getOrbitState().tasks[0].status).toBe("running");
+});
+
+test("workspace navigation can release an existing input lease but cannot acquire outside its scope", () => {
+  const { conversationId } = setup();
+  const a = store.orbitActions;
+  const [mid] = a.createComputers(input);
+  const token = a.beginInteraction(mid);
+  a.createWorkspace("Another place");
+  expect(() => a.beginInteraction(mid)).toThrow("current workspace");
+  a.endInteraction(mid, token);
+  expect(store.getOrbitState().control[mid]).toBe("agent");
 });

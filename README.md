@@ -1,6 +1,6 @@
 # Orbit
 
-Computers for agents. Work with your agent in a persistent conversation, give it a fleet of computers, watch their desktops, and take control whenever you need.
+Computers for agents. Work with your agent in a persistent conversation, give it a fleet of computers, watch their desktops, and work directly alongside them.
 
 This is a **local interactive frontend prototype**, not a cloud service. Agent responses, provisioning, desktop sessions, and execution are simulated. Projects, conversations, computers, files, schedules, and preferences persist in local storage.
 
@@ -28,17 +28,17 @@ pnpm dev:api                     # independent legacy mock API
 
 1. Open **Computers** to see the one shared workspace fleet. Projects show only computers assigned to their active conversations.
 2. Start a conversation. Choose a project and agent; no computer is required yet.
-3. Use **Attach** for an available computer, or **New computer** to configure an OS, resources, and up to ten computers. Creating from the agent panel automatically attaches the fleet.
+3. Use the composer’s **+** menu for an available computer, or **New computer** to configure an OS, resources, and up to ten computers. Creating from the agent panel automatically attaches the fleet.
 4. The computer opens beside the conversation. The OS desktop stays visible; apps open inside it, not in separate Orbit tabs. Choose fitted 16:10, 16:9, or fill. The desktop is an interactive local preview, not a stream.
-5. **Continue** starts the demo run. **Preview next step** advances a deterministic three-step example to review. It does not interpret or execute your prompt.
-6. **Take control** pauses the agent and unlocks the demo terminal and file editor. Start any stopped computers, hand control back, and continue when ready.
+5. **Run preview** walks through three simulated tool events, with working, searching, and composing orbs. **Pause** stops the preview. This does not interpret or execute your prompt.
+6. Click or type directly in the desktop. Orbit automatically yields to your input and resumes a previously running preview after the desktop is free. Focused editors and held pointers keep their input lease; a manually paused run stays paused. There is no takeover or hand-back button.
 7. Approve the example output or end the run. Computers and files remain available for another conversation.
 
 ### Computer mentions and permissions
 
-Type `@` to search your workspace computers, then select one with the keyboard or pointer. Names insert as quoted tokens such as `@"Development"`; messages resolve these to computer IDs. A mention requests access—it does not grant it. Allow or deny access for that conversation in the agent response.
+Type `@` to search your workspace computers, then select one with the keyboard or pointer. Names appear as blue inline mentions such as `@Development` in the composer and soft blue pills in sent messages. Full names (including spaces) resolve to computer IDs; older quoted mentions are still supported. Ambiguous duplicate names never grant access. A mention requests access—it does not grant it. Allow or deny access for that conversation in the agent response.
 
-The default policy is **Ask before using computers**. You can explicitly opt into **Allow available workspace computers** for the current conversation. The agent can then select an available machine through **Attach → Let agent choose**, or a subsequent message when none is assigned. Human-controlled computers still require approval, busy computers cannot be reassigned, and the policy can be switched back to asking. Ending a run releases its assignments but preserves the machines and files.
+Open **Conversation settings (···)** for project/agent setup and computer permissions. The default policy is to ask first. You can explicitly opt into **Allow available workspace computers** for the current conversation. The agent can then select an available machine through **+ → Let agent choose**, or a subsequent message when none is assigned. Human-controlled computers still require approval, busy computers cannot be reassigned, and the policy can be switched back to asking. Ending a run releases its assignments but preserves the machines and files.
 
 Agent responses render Markdown, lists, code, and tables. Expandable tool cards show demo commands, searches, file actions, inputs, and output. No commands or searches run externally in this prototype.
 
@@ -46,7 +46,9 @@ The demo shell supports `help`, `pwd`, `ls`, `cat <filename>`, `uname`, and `cle
 
 **⌘K / Ctrl+K** searches projects, computers, and conversations, and opens agent skills, scheduled work, and settings. Arrow keys select; Enter opens; Escape dismisses.
 
-The sidebar keeps main navigation, collapsible project folders, recent conversations, and the workspace/profile switcher. The agent panel persists across pages, can collapse, and resizes with a drag or arrow keys on its separator.
+Collapse the sidebar with its top toggle or **⌘\\ / Ctrl+\\**. The sidebar disappears completely; a title-bar button restores it, and ⌘K search remains available. The layout preference is remembered locally. Empty conversations offer editable starter prompts, and sessions without computers offer inline provisioning.
+
+The sidebar keeps New conversation and Computers, collapsible projects, Recents, and the workspace/profile switcher. The plus beside each project creates a session immediately; the first message names it. Sessions appear within their project. When a session uses multiple computers, a compact tab strip switches between just those computers. Agent management remains in conversation settings and ⌘K. The agent panel persists across pages, can collapse, and resizes with a drag or arrow keys on its separator.
 
 ## Code map
 
@@ -57,7 +59,10 @@ apps/desktop/
     components/
       app-shell.tsx             Sidebar, agent panel, resizable workspace
       sidebar.tsx               Navigation, projects, recents, workspace menu
-      agent-panel.tsx           Conversation, composer, permissions, computers
+      agent-panel.tsx           Conversation, one composer, contextual settings
+      agent-orb.tsx             Thinking Orbs adapter with reduced-motion support
+      session-computer-tabs.tsx Session-scoped computer navigation
+      computer-switcher.tsx     Workspace-wide computer picker
       agent-message.tsx         Markdown responses and structured tool cards
       computer-mention-input.tsx Keyboard-accessible @computer suggestions
       command-palette.tsx       Workspace search and keyboard navigation
@@ -68,6 +73,8 @@ apps/desktop/
       schedule-composer.tsx     Optional recurring-work configuration
       ui/                       Owned Base UI controls and Phosphor exports
     pages/                      Route-level composition
+    hooks/use-agent-preview.ts   Opt-in demo event playback and orb phases
+    hooks/use-desktop-interaction.ts Automatic pointer/focus/input coordination
     hooks/use-orbit.ts           Reactive local state subscription
     hooks/queries.ts             Workspace-scoped fleet query hooks
     lib/orbit-store.ts           Validated state + product actions + persistence
@@ -85,13 +92,15 @@ apps/api/                       Legacy in-memory Express scaffold
 
 Use the small components in `src/components/ui`. They follow the existing shadcn Base UI direction, **not Radix**. Base UI handles focus and keyboard interactions; Orbit owns the visual styling. Menu labels must be inside `DropdownMenuGroup`.
 
+The compact prompt, folded tool rows, approval cards, and screen-first layout take cues from [Beautiful UI](https://www.beautifului.dev/). The MIT-licensed [Thinking Orbs](https://libraries.dev/orbs) package supplies the animated activity indicator; only active preview execution animates, and reduced-motion preferences pause it.
+
 Use Phosphor icons through `ui/icons.ts`, OS marks through `OsLogo`, and custom `SelectControl` / `Checkbox` components instead of native selects and checkboxes. Favor surface colors over extra borders. SF Pro comes from the macOS system font; variable Inter is bundled as the fallback.
 
 The sidebar's scrollbar stays at the outer edge. Its content padding compensates for the reserved scrollbar width; avoid adding right padding to the scroll container.
 
 ### State and backend handoff
 
-All local product mutations go through `orbitActions`. Updates clone and validate state before publishing it, so rejected actions cannot partially update the prototype. Workspace checks apply to reads and mutations; assigned computers cannot be shared between unfinished runs. New computers have `workspaceId`; the legacy `projectId` field is retained for old records, not used as ownership. Project computers are derived from active assignments, not the legacy `machineCount` field. Human takeover and stopping a computer pause its run.
+All local product mutations go through `orbitActions`. Updates clone and validate state before publishing it, so rejected actions cannot partially update the prototype. Workspace checks apply to reads and mutations; assigned computers cannot be shared between unfinished runs. New computers have `workspaceId`; the legacy `projectId` field is retained for old records, not used as ownership. Project computers are derived from active assignments, not the legacy `machineCount` field. Desktop input temporarily yields its run; stopping a computer pauses it. Input leases are ephemeral, token-scoped, and cleared on navigation/unmount or idle. They are not restored after an application restart. The local demonstration waits for all involved desktops to be free; a real backend should arbitrate input per computer so unrelated fleet work can continue.
 
 The storage key is `orbit.prototype.v1`. Older records are accepted with defaults for newly added fields. The persisted `tasks` collection now represents conversations with an optional demo-run lifecycle; the key is retained to preserve existing data. `activeConversations` remembers the selected conversation for each workspace. Storage failures are surfaced in Settings.
 

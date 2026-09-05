@@ -20,11 +20,19 @@ const operatingSystems = [
 ];
 export function CreateMachineDialog({
   onCreated,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   projectId?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
   onCreated?: (machineIds: string[]) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = onOpenChange ?? setLocalOpen;
   const [name, setName] = useState("Development");
   const [os, setOS] = useState<MachineOS>("ubuntu");
   const [cpu, setCPU] = useState(4);
@@ -48,7 +56,11 @@ export function CreateMachineDialog({
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>New computer</DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger render={<Button size="sm" />}>
+          New computer
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[90vh] overflow-y-auto p-6">
         <DialogTitle>Create computers</DialogTitle>
         <DialogDescription className="mt-2">

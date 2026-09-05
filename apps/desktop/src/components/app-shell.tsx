@@ -5,6 +5,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { SidebarSimple } from "./ui/icons";
 import { Sidebar } from "./sidebar";
 import { AgentPanel } from "./agent-panel";
 import { orbitActions } from "@/lib/orbit-store";
@@ -28,6 +29,30 @@ export function AppShell() {
   useEffect(() => {
     if (taskId && task) orbitActions.openConversation(taskId);
   }, [taskId, state.workspaceId]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("orbit.sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("orbit.sidebar-collapsed", String(sidebarCollapsed));
+    } catch {
+      /* Layout still works when storage is unavailable. */
+    }
+  }, [sidebarCollapsed]);
+  useEffect(() => {
+    const toggle = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "\\") {
+        event.preventDefault();
+        setSidebarCollapsed((value) => !value);
+      }
+    };
+    window.addEventListener("keydown", toggle);
+    return () => window.removeEventListener("keydown", toggle);
+  }, []);
   const [agentCollapsed, setAgentCollapsed] = useState(false);
   const [conversationWidth, setConversationWidth] = useState(
     DEFAULT_CONVERSATION_WIDTH,
@@ -35,7 +60,10 @@ export function AppShell() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const maxWidth = Math.max(
     MIN_CONVERSATION_WIDTH,
-    Math.min(MAX_CONVERSATION_WIDTH, windowWidth - 648),
+    Math.min(
+      MAX_CONVERSATION_WIDTH,
+      windowWidth - (sidebarCollapsed ? 360 : 648),
+    ),
   );
   const visibleWidth = Math.min(conversationWidth, maxWidth);
   useEffect(() => {
@@ -64,10 +92,27 @@ export function AppShell() {
 
   return (
     <div className="flex h-full w-full bg-transparent text-zinc-100">
-      <Sidebar />
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((value) => !value)}
+      />
 
-      <div className="h-full w-full overflow-hidden flex-1">
-        <div className="flex min-w-0 flex-1 overflow-hidden h-full">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+        {sidebarCollapsed && (
+          <div className="window-drag flex h-[54px] shrink-0 items-center pl-24">
+            <button
+              aria-label="Expand sidebar"
+              aria-expanded={false}
+              aria-controls="sidebar-content"
+              title="Show sidebar"
+              onClick={() => setSidebarCollapsed(false)}
+              className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 focus-visible:outline focus-visible:outline-2"
+            >
+              <SidebarSimple className="size-4" />
+            </button>
+          </div>
+        )}
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <AgentPanel
             projectId={projectId}
             width={visibleWidth}
