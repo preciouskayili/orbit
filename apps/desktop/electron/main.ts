@@ -19,8 +19,12 @@ function registerIpcFoundation() {
   );
 }
 
+const appIconPath = () =>
+  path.join(app.getAppPath(), "resources/icons/orbit.png");
+
 function createWindow() {
   const window = new BrowserWindow({
+    icon: appIconPath(),
     width: 1560,
     height: 1000,
     minWidth: 1120,
@@ -68,6 +72,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === "darwin") app.dock?.setIcon(appIconPath());
   registerIpcFoundation();
   createWindow();
 

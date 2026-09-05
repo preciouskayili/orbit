@@ -92,6 +92,12 @@ packages/shared/                Shared Zod contracts and Electron IPC types
 apps/api/                       Legacy in-memory Express scaffold
 ```
 
+### Brand and app icon
+
+Your supplied SVGs are the sources in `src/assets/brand/`: `orbit-mark.svg` for the white ring, `orbit-app.svg` for the blue app tile. `OrbitLogo` is the reusable UI component. The sidebar uses the white mark; the browser favicon and Electron Dock/window use the blue tile.
+
+`pnpm --filter @orbit/desktop icons:generate` rebuilds the PNGs and, on macOS, `resources/icons/orbit.icns`. Electron builds run this automatically. Restart Electron to update its Dock icon. The ICNS is ready for macOS packaging; this repository does not yet produce a packaged `.app`, so its Finder icon must be configured when packaging is added. Include `resources/icons` in that package.
+
 ### UI conventions
 
 Use the small components in `src/components/ui`. They follow the existing shadcn Base UI direction, **not Radix**. Base UI handles focus and keyboard interactions; Orbit owns the visual styling. Menu labels must be inside `DropdownMenuGroup`.

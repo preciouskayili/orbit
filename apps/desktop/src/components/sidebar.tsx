@@ -1,3 +1,4 @@
+import { OrbitLogo } from "./orbit-logo";
 import { CommandPalette } from "./command-palette";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -84,8 +85,9 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             <Link
               to="/new"
               onClick={() => orbitActions.newConversation()}
-              className="text-lg font-medium text-zinc-100"
+              className="flex items-center gap-2.5 text-lg font-medium text-zinc-100"
             >
+              <OrbitLogo decorative className="h-6 w-auto shrink-0" />
               Orbit
             </Link>
             <button
