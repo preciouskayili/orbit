@@ -6,6 +6,7 @@ import {
 } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { WindowToolbar, useWindowNavigation } from "./window-toolbar";
+import { CaretRight } from "./ui/icons";
 import { Sidebar } from "./sidebar";
 import { AgentPanel } from "./agent-panel";
 import { orbitActions } from "@/lib/orbit-store";
@@ -54,6 +55,10 @@ export function AppShell() {
     window.addEventListener("keydown", toggle);
     return () => window.removeEventListener("keydown", toggle);
   }, []);
+  const [chatHidden, setChatHidden] = useState(false);
+  useEffect(() => {
+    if (location.pathname === "/new" || taskId) setChatHidden(false);
+  }, [location.key, taskId]);
   const [conversationWidth, setConversationWidth] = useState(
     DEFAULT_CONVERSATION_WIDTH,
   );
@@ -101,58 +106,91 @@ export function AppShell() {
 
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <AgentPanel
-            projectId={projectId}
-            width={visibleWidth}
-            floatingControls={sidebarCollapsed}
-          />
-
           <div
-            role="separator"
-            aria-label="Resize conversation"
-            aria-orientation="vertical"
-            aria-valuemin={MIN_CONVERSATION_WIDTH}
-            aria-valuemax={maxWidth}
-            aria-valuenow={visibleWidth}
-            tabIndex={0}
-            onPointerDown={(event) => {
-              dragStart.current = {
-                pointerX: event.clientX,
-                width: visibleWidth,
-              };
-              event.currentTarget.setPointerCapture(event.pointerId);
-            }}
-            onPointerMove={resizeConversation}
-            onPointerUp={(event) => {
-              dragStart.current = null;
-              event.currentTarget.releasePointerCapture(event.pointerId);
-              event.currentTarget.blur();
-            }}
-            onPointerCancel={(event) => {
-              dragStart.current = null;
-              event.currentTarget.blur();
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
-                return;
-              event.preventDefault();
-              const change = event.key === "ArrowLeft" ? -16 : 16;
-              setConversationWidth((width) =>
-                Math.min(
-                  maxWidth,
-                  Math.max(
-                    MIN_CONVERSATION_WIDTH,
-                    Math.min(width, maxWidth) + change,
-                  ),
-                ),
-              );
-            }}
-            className="group relative z-20 -mx-[3px] w-[7px] shrink-0 cursor-col-resize touch-none outline-none"
+            id="chat-panel"
+            hidden={chatHidden}
+            className={chatHidden ? "hidden" : "contents"}
           >
-            <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors duration-150 group-hover:bg-[#dd583b] group-active:bg-[#dd583b] group-focus-visible:bg-[#dd583b]" />
-          </div>
+            <AgentPanel
+              projectId={projectId}
+              width={visibleWidth}
+              floatingControls={sidebarCollapsed}
+              onHide={() => setChatHidden(true)}
+            />
 
-          <main className="min-w-0 flex-1 bg-[#171818]">
+            <div
+              role="separator"
+              aria-label="Resize conversation"
+              aria-orientation="vertical"
+              aria-valuemin={MIN_CONVERSATION_WIDTH}
+              aria-valuemax={maxWidth}
+              aria-valuenow={visibleWidth}
+              tabIndex={0}
+              onPointerDown={(event) => {
+                dragStart.current = {
+                  pointerX: event.clientX,
+                  width: visibleWidth,
+                };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={resizeConversation}
+              onPointerUp={(event) => {
+                dragStart.current = null;
+                event.currentTarget.releasePointerCapture(event.pointerId);
+                event.currentTarget.blur();
+              }}
+              onPointerCancel={(event) => {
+                dragStart.current = null;
+                event.currentTarget.blur();
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+                  return;
+                event.preventDefault();
+                const change = event.key === "ArrowLeft" ? -16 : 16;
+                setConversationWidth((width) =>
+                  Math.min(
+                    maxWidth,
+                    Math.max(
+                      MIN_CONVERSATION_WIDTH,
+                      Math.min(width, maxWidth) + change,
+                    ),
+                  ),
+                );
+              }}
+              className="group relative z-20 -mx-[3px] w-[7px] shrink-0 cursor-col-resize touch-none outline-none"
+            >
+              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors duration-150 group-hover:bg-zinc-500/60 group-active:bg-zinc-400/70 group-focus-visible:bg-zinc-400/70" />
+            </div>
+          </div>
+          {chatHidden && (
+            <div
+              aria-label="Collapsed chat"
+              className={
+                "window-no-drag flex w-9 shrink-0 justify-center bg-[#181818] " +
+                (sidebarCollapsed ? "pt-14" : "pt-[7px]")
+              }
+            >
+              <button
+                aria-label="Show chat"
+                aria-expanded={false}
+                aria-controls="chat-panel"
+                title="Show chat"
+                onClick={() => setChatHidden(false)}
+                className="window-controls relative z-30 h-7 rounded-md p-1.5 text-zinc-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 [&_svg]:pointer-events-none"
+              >
+                <CaretRight weight="regular" className="size-4" />
+              </button>
+            </div>
+          )}
+          <main
+            className={
+              "min-w-0 flex-1 bg-[#171818] " +
+              (sidebarCollapsed && chatHidden
+                ? "[&_.window-drag]:pl-[148px] [&_.window-drag]:[-webkit-app-region:no-drag]"
+                : "")
+            }
+          >
             <Outlet />
           </main>
         </div>

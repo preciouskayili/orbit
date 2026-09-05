@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { orbitActions } from "@/lib/orbit-store";
 import { useNavigate } from "react-router-dom";
+import { PlusIcon } from "@phosphor-icons/react";
 
 export function Page({
   title,
@@ -115,9 +116,15 @@ export function CreateContainer({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        render={<Button variant={compact ? "ghost" : "secondary"} size={compact ? "icon-sm" : "sm"} aria-label={compact ? "New " + kind : undefined} />}
+        render={
+          <Button
+            variant={compact ? "ghost" : "secondary"}
+            size={compact ? "icon-sm" : "sm"}
+            aria-label={compact ? "New " + kind : undefined}
+          />
+        }
       >
-        {compact ? <Plus className="size-3.5" /> : <>New {kind}</>}
+        {compact ? <PlusIcon className="size-3.5" /> : <>New {kind}</>}
       </DialogTrigger>
       <DialogContent className="p-6">
         <DialogTitle>Create a {kind}</DialogTitle>

@@ -737,3 +737,59 @@ test("agent identity lives inside the conversation and only the window sidebar t
       .closest("form"),
   ).toBeTruthy();
 });
+
+test("chat can hide completely and reopen without losing its draft", () => {
+  render(
+    <MemoryRouter>
+      <AppShell />
+    </MemoryRouter>,
+  );
+  const input = screen.getByRole("combobox", { name: "Message your agent" });
+  fireEvent.change(input, { target: { value: "Keep this chat draft" } });
+  fireEvent.click(screen.getByRole("button", { name: "Hide chat" }));
+  expect(
+    screen.queryByRole("combobox", { name: "Message your agent" }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("separator", { name: "Resize conversation" }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("navigation", { name: "Main navigation" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+  expect(screen.getByRole("button", { name: "Show chat" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Show chat" }));
+  expect(
+    (
+      screen.getByRole("combobox", {
+        name: "Message your agent",
+      }) as HTMLTextAreaElement
+    ).value,
+  ).toBe("Keep this chat draft");
+  expect(
+    screen.getByRole("separator", { name: "Resize conversation" }),
+  ).toBeTruthy();
+  expect(
+    screen.queryByRole("navigation", { name: "Main navigation" }),
+  ).toBeNull();
+});
+
+test("collapsing chat leaves a visible caret at the chat edge rather than the far workspace corner", () => {
+  render(
+    <MemoryRouter>
+      <AppShell />
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Hide chat" }));
+  const restore = screen.getByRole("button", { name: "Show chat" });
+  expect(restore.parentElement?.getAttribute("aria-label")).toBe(
+    "Collapsed chat",
+  );
+  expect(restore.parentElement?.nextElementSibling?.tagName).toBe("MAIN");
+  expect(restore.closest("[hidden]")).toBeNull();
+  fireEvent.click(restore);
+  expect(
+    screen.getByRole("combobox", { name: "Message your agent" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Show chat" })).toBeNull();
+});

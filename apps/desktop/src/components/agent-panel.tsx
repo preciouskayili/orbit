@@ -8,6 +8,7 @@ import {
   Monitor,
   Plus,
   Robot,
+  SidebarSimple,
 } from "./ui/icons";
 import { Button } from "./ui/button";
 import { SelectControl } from "./ui/select";
@@ -48,10 +49,12 @@ export function AgentPanel({
   projectId: routeProjectId,
   width,
   floatingControls = false,
+  onHide,
 }: {
   projectId: string;
   width: number;
   floatingControls?: boolean;
+  onHide?: () => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -253,12 +256,24 @@ export function AgentPanel({
       className="flex min-h-0 min-w-[360px] shrink-0 flex-col bg-[#181818]"
     >
       <div
-        aria-hidden="true"
         className={
-          "h-[54px] shrink-0 " + (floatingControls ? "pl-[184px]" : "")
+          "relative h-[54px] shrink-0 pr-12 " +
+          (floatingControls ? "pl-[184px]" : "")
         }
       >
         <div className="window-drag h-full" />
+        {onHide && (
+          <button
+            aria-label="Hide chat"
+            aria-expanded={true}
+            aria-controls="chat-panel"
+            title="Hide chat"
+            onClick={onHide}
+            className="window-controls absolute right-3 top-[7px] z-30 rounded-md p-1.5 text-zinc-400 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 [&_svg]:pointer-events-none"
+          >
+            <SidebarSimple weight="regular" className="size-4 -scale-x-100" />
+          </button>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         {!conversation?.messages.length ? (
