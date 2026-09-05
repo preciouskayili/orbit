@@ -793,3 +793,36 @@ test("collapsing chat leaves a visible caret at the chat edge rather than the fa
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Show chat" })).toBeNull();
 });
+
+test("hiding both panels keeps the computer header draggable without covering window controls", async () => {
+  const [id] = orbitActions.createComputers({
+    name: "Drag testing",
+    os: "ubuntu",
+    cpu: 4,
+    ramGb: 8,
+    storageGb: 80,
+  });
+  const machine = getOrbitState().machines.find((m) => m.id === id)!;
+  render(
+    <MemoryRouter initialEntries={["/computer"]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route
+            path="computer"
+            element={<MachineViewport machine={machine} />}
+          />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Hide chat" }));
+  const main = screen.getByRole("main");
+  expect(main.className).toContain("[&_.window-drag]:ml-[148px]");
+  expect(main.className).not.toContain("no-drag");
+  expect(main.querySelector(".window-drag")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Computer actions" }));
+  expect(
+    await screen.findByRole("menuitem", { name: "Rename computer" }),
+  ).toBeTruthy();
+});

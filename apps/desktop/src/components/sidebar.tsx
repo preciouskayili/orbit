@@ -276,7 +276,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </div>
           <footer className="shrink-0 px-4 pb-3">
             <DropdownMenu>
-              <DropdownMenuTrigger className="mt-2 flex h-14 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400">
+              <DropdownMenuTrigger className="mt-2 flex h-14 w-full items-center gap-3 rounded-xl px-2 text-left hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#34465c] text-[11px] text-zinc-200">
                   {initials}
                 </span>
@@ -284,7 +284,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <span className="block truncate text-sm text-zinc-200">
                     {state.settings.name}
                   </span>
-                  <span className="mt-1 block truncate text-[11px] text-zinc-500">
+                  <span className="mt-px block truncate text-[11px] text-zinc-500">
                     {workspace.name}
                   </span>
                 </span>

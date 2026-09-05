@@ -187,7 +187,9 @@ export function AppShell() {
             className={
               "min-w-0 flex-1 bg-[#171818] " +
               (sidebarCollapsed && chatHidden
-                ? "[&_.window-drag]:pl-[148px] [&_.window-drag]:[-webkit-app-region:no-drag]"
+                ? // Move the actual drag rectangle past the floating controls.
+                  // Padding still overlaps them; no-drag disables the whole header.
+                  "[&_.window-drag]:ml-[148px]"
                 : "")
             }
           >
