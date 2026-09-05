@@ -16,11 +16,9 @@ export function ComputerEmptyState({
     <section className="flex min-h-80 flex-col items-center justify-center px-6 py-12 text-center">
       <div
         aria-hidden="true"
-        className="relative mb-7 flex h-24 w-32 items-center justify-center rounded-2xl bg-white/[0.035]"
+        className="relative mb-7 flex h-24 w-28 items-center justify-center rounded-2xl bg-white/[0.035]"
       >
-        <div className="absolute -right-2 -top-2 size-9 rounded-xl bg-[#242626]" />
-        <Monitor weight="thin" className="relative size-12 text-zinc-500" />
-        <span className="absolute bottom-5 right-8 size-1.5 rounded-full bg-sky-300/60" />
+        <Monitor weight="regular" className="relative size-12 text-zinc-500" />
       </div>
       <h2 className="text-lg font-medium tracking-tight text-zinc-200">
         {title}

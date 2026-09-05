@@ -1,3 +1,4 @@
+import { attachmentSchema, type ChatAttachment } from "./chat-attachments";
 import { z } from "zod";
 import {
   ActivityEventSchema,
@@ -41,6 +42,7 @@ const taskSchema = z.object({
     z.object({
       role: z.enum(["user", "assistant"]),
       content: z.string(),
+      attachments: z.array(attachmentSchema).max(8).optional(),
       tool: z
         .object({
           name: z.enum(["terminal", "search", "files"]),
@@ -663,6 +665,7 @@ export const orbitActions = {
     agentId: string,
     prompt: string,
     mentionedComputerIds: string[] = [],
+    attachments: ChatAttachment[] = [],
   ) {
     const conversationId = id();
     update((d) => {
@@ -690,7 +693,7 @@ export const orbitActions = {
         events: [],
         artifacts: [],
         messages: [
-          { role: "user", content: prompt.trim() },
+          { role: "user", content: prompt.trim(), attachments },
           {
             role: "assistant",
             content:
@@ -763,6 +766,7 @@ export const orbitActions = {
     taskId: string,
     content: string,
     mentionedComputerIds: string[] = [],
+    attachments: ChatAttachment[] = [],
   ) {
     update((d) => {
       const task = taskInWorkspace(d, taskId);
@@ -771,7 +775,11 @@ export const orbitActions = {
         task.prompt = content.trim();
         task.title = content.trim().slice(0, 65);
       }
-      task.messages.push({ role: "user", content: content.trim() });
+      task.messages.push({
+        role: "user",
+        content: content.trim(),
+        attachments,
+      });
       mentionedComputerIds.forEach((mid) => requestComputer(d, task, mid));
       if (
         !mentionedComputerIds.length &&

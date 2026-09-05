@@ -9,7 +9,9 @@ export function ComputerMentionInput({
   onSend,
   computers,
   inputRef,
+  disabled = false,
 }: {
+  disabled?: boolean;
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
@@ -34,7 +36,7 @@ export function ComputerMentionInput({
           m.name.toLowerCase().includes(match[1]!.toLowerCase()),
         )
       : [];
-  const open = Boolean(match && !dismissed);
+  const open = Boolean(match && !dismissed && !disabled);
   function select(machine: Machine) {
     const start = caret - (match?.[0].length ?? 0);
     const next =
@@ -109,6 +111,7 @@ export function ComputerMentionInput({
       </div>
       <textarea
         ref={input}
+        disabled={disabled}
         role="combobox"
         aria-label="Message your agent"
         aria-expanded={open}

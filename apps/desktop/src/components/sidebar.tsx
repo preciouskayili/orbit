@@ -2,7 +2,6 @@ import { CommandPalette } from "./command-palette";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  SidebarSimple,
   Bell,
   Buildings,
   CaretDown,
@@ -40,13 +39,7 @@ const navigation = [
   { label: "New conversation", path: "/new", icon: ChatCircleDots },
   { label: "Computers", path: "/computers", icon: Monitor },
 ];
-export function Sidebar({
-  collapsed = false,
-  onToggle,
-}: {
-  collapsed?: boolean;
-  onToggle?: () => void;
-}) {
+export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const state = useOrbit();
   const location = useLocation();
   const navigate = useNavigate();
@@ -79,24 +72,9 @@ export function Sidebar({
           (collapsed ? "hidden" : "w-72")
         }
       >
-        <div className="window-drag h-[54px] shrink-0" />
-        {onToggle && (
-          <button
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-expanded={!collapsed}
-            aria-controls="sidebar-content"
-            title={"Toggle sidebar (⌘" + "\\" + ")"}
-            onClick={onToggle}
-            className={
-              "relative rounded-lg p-2 text-zinc-400 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 " +
-              (collapsed
-                ? "mx-auto mb-2"
-                : "-mt-[43px] mb-[11px] mr-4 self-end")
-            }
-          >
-            <SidebarSimple className="size-4" />
-          </button>
-        )}
+        <div className="h-[54px] shrink-0 pl-[184px]">
+          <div className="window-drag h-full" />
+        </div>
         <div
           id="sidebar-content"
           hidden={collapsed}
@@ -147,7 +125,9 @@ export function Sidebar({
                 className={
                   row +
                   (location.pathname === item.path
-                    ? " bg-white/[0.065] text-zinc-100"
+                    ? item.path === "/new"
+                      ? " text-zinc-100"
+                      : " bg-white/[0.065] text-zinc-100"
                     : " text-zinc-400")
                 }
               >
@@ -168,10 +148,11 @@ export function Sidebar({
                   const Icon = expanded ? FolderOpen : Folder;
                   return (
                     <div key={project.id}>
-                      <div className="flex items-center rounded-lg hover:bg-white/[0.04]">
+                      <div className="flex items-center">
                         <button
                           aria-label={"Toggle " + project.name}
                           aria-expanded={expanded}
+                          aria-controls={"project-sessions-" + project.id}
                           onClick={() =>
                             setClosed((current) => {
                               const next = new Set(current);
@@ -180,16 +161,17 @@ export function Sidebar({
                               return next;
                             })
                           }
-                          className="rounded-lg p-2.5 text-zinc-500"
+                          className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-sm text-zinc-400 hover:text-zinc-200"
                         >
-                          <Icon className="size-3.5" />
+                          <CaretRight
+                            className={
+                              "size-3 shrink-0 transition-transform " +
+                              (expanded ? "rotate-90" : "")
+                            }
+                          />
+                          <Icon className="size-3.5 shrink-0" />
+                          <span className="truncate">{project.name}</span>
                         </button>
-                        <Link
-                          to={"/projects/" + project.id}
-                          className="min-w-0 flex-1 truncate py-2 text-sm text-zinc-300"
-                        >
-                          {project.name}
-                        </Link>
                         <button
                           aria-label={"New session in " + project.name}
                           title="New session"
@@ -207,16 +189,24 @@ export function Sidebar({
                             });
                             navigate("/sessions/" + id);
                           }}
-                          className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-200 disabled:opacity-30"
+                          className="bg-transparent p-2 text-zinc-500 hover:text-zinc-200 disabled:opacity-30 focus-visible:outline focus-visible:outline-2"
                         >
                           <Plus className="size-3.5" />
                         </button>
                       </div>
                       {expanded && (
-                        <div className="mt-1 space-y-0.5">
+                        <div
+                          id={"project-sessions-" + project.id}
+                          className="mt-1 space-y-0.5"
+                        >
+                          {!tasks.some((t) => t.projectId === project.id) &&
+                            !projectComputers(state, project.id).length && (
+                              <p className="py-2 pl-10 text-xs text-zinc-600">
+                                No sessions yet
+                              </p>
+                            )}
                           {tasks
                             .filter((t) => t.projectId === project.id)
-                            .slice(0, 5)
                             .map((task) => (
                               <Link
                                 key={task.id}

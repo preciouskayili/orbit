@@ -49,6 +49,19 @@ textarea,
   -webkit-app-region: drag;
 }
 
+/* Electron hit testing uses drag rectangles, not just CSS stacking order.
+   Exclude the complete floating control cluster, including its SVG children. */
+.window-controls,
+.window-controls * {
+  -webkit-app-region: no-drag;
+}
+.window-controls {
+  pointer-events: auto;
+}
+.window-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;

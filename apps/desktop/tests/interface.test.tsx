@@ -122,12 +122,7 @@ test("agent can begin a conversation and provision a computer inline", async () 
   const projectId = orbitActions.createProject("Chat testing", "");
   render(
     <MemoryRouter>
-      <AgentPanel
-        width={480}
-        collapsed={false}
-        projectId={projectId}
-        onToggle={() => {}}
-      />
+      <AgentPanel width={480} projectId={projectId} />
       <Location />
     </MemoryRouter>,
   );
@@ -141,7 +136,9 @@ test("agent can begin a conversation and provision a computer inline", async () 
     "/sessions/" + conversationId,
   );
   expect(screen.getByRole("log").textContent).toContain("Help me build an app");
-  fireEvent.click(screen.getByRole("button", { name: "Add computer" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Add attachments or computers" }),
+  );
   fireEvent.click(
     await screen.findByRole("menuitem", { name: "New computer" }),
   );
@@ -199,7 +196,7 @@ test("desktop editing needs no takeover button and releases input automatically"
   }
 });
 
-test("agent stays alongside other pages; collapse, restore and keyboard resizing work", async () => {
+test("agent stays alongside other pages with one sidebar toggle and keyboard resizing", async () => {
   render(
     <MemoryRouter initialEntries={["/new"]}>
       <Routes>
@@ -221,11 +218,8 @@ test("agent stays alongside other pages; collapse, restore and keyboard resizing
   expect(Number(separator.getAttribute("aria-valuenow"))).toBe(
     Math.max(400, before - 16),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Hide agent" }));
-  expect(
-    screen.queryByRole("combobox", { name: "Message your agent" }),
-  ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Show agent" }));
+  expect(screen.queryByRole("button", { name: "Hide agent" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Show agent" })).toBeNull();
   fireEvent.click(screen.getByRole("link", { name: "Visit agents" }));
   expect(screen.getByText("Agent settings canvas")).toBeTruthy();
   expect(
@@ -267,12 +261,7 @@ test("computer mentions use keyboard selection and ask for permission before att
   });
   render(
     <MemoryRouter>
-      <AgentPanel
-        width={480}
-        collapsed={false}
-        projectId={projectId}
-        onToggle={() => {}}
-      />
+      <AgentPanel width={480} projectId={projectId} />
       <Location />
     </MemoryRouter>,
   );
@@ -362,12 +351,7 @@ test("preview orbs follow execution and automatic input yielding", () => {
     orbitActions.attachComputers(cid, [mid]);
     const view = render(
       <MemoryRouter>
-        <AgentPanel
-          width={480}
-          collapsed={false}
-          projectId={projectId}
-          onToggle={() => {}}
-        />
+        <AgentPanel width={480} projectId={projectId} />
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Run preview" }));
@@ -406,12 +390,7 @@ test("conversation setup is tucked away without hiding access choices", async ()
   orbitActions.createConversation(projectId, "fleet-agent", "A conversation");
   render(
     <MemoryRouter>
-      <AgentPanel
-        width={480}
-        collapsed={false}
-        projectId={projectId}
-        onToggle={() => {}}
-      />
+      <AgentPanel width={480} projectId={projectId} />
     </MemoryRouter>,
   );
   expect(
@@ -526,12 +505,7 @@ test("welcome suggestions populate the composer without sending or provisioning"
   const projectId = orbitActions.createProject("Welcome testing", "");
   render(
     <MemoryRouter>
-      <AgentPanel
-        projectId={projectId}
-        width={480}
-        collapsed={false}
-        onToggle={() => {}}
-      />
+      <AgentPanel projectId={projectId} width={480} />
     </MemoryRouter>,
   );
   fireEvent.click(screen.getByRole("button", { name: /Build & test/ }));
@@ -569,4 +543,197 @@ test("a session without a computer has an actionable empty state and opens its n
   expect(
     getOrbitState().tasks.find((t) => t.id === id)?.machineIds,
   ).toHaveLength(1);
+});
+test("window toolbar navigates back and forward and survives hiding the sidebar", () => {
+  render(
+    <MemoryRouter initialEntries={["/new"]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route
+            path="new"
+            element={<Link to="/agents">Open agent settings</Link>}
+          />
+          <Route path="agents" element={<p>Agent settings destination</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(
+    (screen.getByRole("button", { name: "Go back" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    (screen.getByRole("button", { name: "Go forward" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("link", { name: "Open agent settings" }));
+  fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+  fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+  expect(
+    screen.getByRole("link", { name: "Open agent settings" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Go forward" }));
+  expect(screen.getByText("Agent settings destination")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+  expect(
+    (screen.getByRole("button", { name: "Go back" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+});
+test("the plus menu opens the file picker, supports removal, and sends local attachments without text", async () => {
+  const projectId = orbitActions.createProject("Attachments testing", "");
+  render(
+    <MemoryRouter>
+      <AgentPanel projectId={projectId} width={480} />
+    </MemoryRouter>,
+  );
+  const input = screen.getByLabelText("Attach files") as HTMLInputElement;
+  const picker = vi.spyOn(input, "click");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Add attachments or computers" }),
+  );
+  fireEvent.click(
+    await screen.findByRole("menuitem", { name: "Attach files" }),
+  );
+  expect(picker).toHaveBeenCalledOnce();
+  picker.mockRestore();
+  const user = userEvent.setup();
+  await user.upload(
+    input,
+    new File(["first"], "remove-me.txt", { type: "text/plain" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Remove remove-me.txt" }));
+  expect(screen.queryByText("remove-me.txt")).toBeNull();
+  await user.upload(
+    input,
+    new File(["Keep the contents"], "brief.txt", { type: "text/plain" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+  await waitFor(() => {
+    const id = getOrbitState().activeConversations.personal;
+    expect(
+      getOrbitState().tasks.find((t) => t.id === id)?.messages[0]
+        .attachments?.[0].name,
+    ).toBe("brief.txt");
+  });
+  expect(screen.queryByRole("button", { name: "Remove brief.txt" })).toBeNull();
+  expect(screen.getByRole("button", { name: /brief.txt.*Local/ })).toBeTruthy();
+  const id = getOrbitState().activeConversations.personal;
+  const attachment = getOrbitState().tasks.find((t) => t.id === id)!.messages[0]
+    .attachments![0];
+  const { loadAttachment } = await import("../src/lib/chat-attachments");
+  expect(await (await loadAttachment("personal", attachment.id)).text()).toBe(
+    "Keep the contents",
+  );
+});
+
+test("attachment errors keep the draft and do not send a message", async () => {
+  const projectId = orbitActions.createProject("Attachment limit testing", "");
+  render(
+    <MemoryRouter>
+      <AgentPanel projectId={projectId} width={480} />
+    </MemoryRouter>,
+  );
+  const input = screen.getByLabelText("Attach files") as HTMLInputElement;
+  const files = Array.from(
+    { length: 9 },
+    (_, index) => new File(["x"], index + ".txt"),
+  );
+  await userEvent.setup().upload(input, files);
+  expect(screen.getByText("Attach up to 8 files at a time.")).toBeTruthy();
+  expect(getOrbitState().activeConversations.personal).toBeUndefined();
+});
+test("a local storage failure preserves the attachment and draft for retry", async () => {
+  const projectId = orbitActions.createProject("Attachment retry testing", "");
+  render(
+    <MemoryRouter>
+      <AgentPanel projectId={projectId} width={480} />
+    </MemoryRouter>,
+  );
+  fireEvent.change(
+    screen.getByRole("combobox", { name: "Message your agent" }),
+    { target: { value: "Please review this" } },
+  );
+  await userEvent
+    .setup()
+    .upload(
+      screen.getByLabelText("Attach files"),
+      new File(["contents"], "retry.txt"),
+    );
+  const fail = vi.spyOn(indexedDB, "open").mockImplementationOnce(() => {
+    throw new Error("Local storage unavailable");
+  });
+  try {
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    await screen.findByText("Local storage unavailable");
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: "Message your agent",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe("Please review this");
+    expect(
+      screen.getByRole("button", { name: "Remove retry.txt" }),
+    ).toBeTruthy();
+    expect(getOrbitState().activeConversations.personal).toBeUndefined();
+  } finally {
+    fail.mockRestore();
+  }
+});
+
+test("folder names toggle all sessions and the plain plus reopens a closed folder", () => {
+  const projectId = orbitActions.createProject("Open folder testing", "");
+  for (let index = 0; index < 7; index++) orbitActions.createSession(projectId);
+  render(
+    <MemoryRouter>
+      <Sidebar />
+    </MemoryRouter>,
+  );
+  const folder = screen.getByRole("button", {
+    name: "Toggle Open folder testing",
+  });
+  const region = () => document.getElementById("project-sessions-" + projectId);
+  expect(folder.getAttribute("aria-expanded")).toBe("true");
+  expect(region()?.querySelectorAll("a")).toHaveLength(7);
+  fireEvent.click(screen.getByText("Open folder testing"));
+  expect(folder.getAttribute("aria-expanded")).toBe("false");
+  expect(region()).toBeNull();
+  fireEvent.click(screen.getByText("Open folder testing"));
+  expect(region()?.querySelectorAll("a")).toHaveLength(7);
+  fireEvent.click(folder);
+  const plus = screen.getByRole("button", {
+    name: "New session in Open folder testing",
+  });
+  expect(plus.className).toContain("bg-transparent");
+  expect(plus.className).not.toContain("hover:bg");
+  fireEvent.click(plus);
+  expect(folder.getAttribute("aria-expanded")).toBe("true");
+  expect(region()?.querySelectorAll("a")).toHaveLength(8);
+});
+
+test("agent identity lives inside the conversation and only the window sidebar toggle remains", () => {
+  const projectId = orbitActions.createProject("Inline identity testing", "");
+  orbitActions.createConversation(projectId, "fleet-agent", "Work with me");
+  const agentName = getOrbitState().agents.find(
+    (agent) => agent.id === "fleet-agent",
+  )!.name;
+  render(
+    <MemoryRouter>
+      <AppShell />
+    </MemoryRouter>,
+  );
+  const log = screen.getByRole("log", { name: "Agent conversation" });
+  expect(log.textContent).toContain(agentName);
+  expect(log.querySelector('[data-orb-phase="idle"]')).toBeTruthy();
+  expect(screen.getAllByText(agentName, { exact: true })).toHaveLength(1);
+  expect(
+    screen.getAllByRole("button", { name: /Collapse sidebar/ }),
+  ).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Hide agent" })).toBeNull();
+  expect(
+    screen
+      .getByRole("button", { name: "Conversation settings" })
+      .closest("form"),
+  ).toBeTruthy();
 });

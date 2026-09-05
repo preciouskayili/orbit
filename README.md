@@ -34,21 +34,25 @@ pnpm dev:api                     # independent legacy mock API
 6. Click or type directly in the desktop. Orbit automatically yields to your input and resumes a previously running preview after the desktop is free. Focused editors and held pointers keep their input lease; a manually paused run stays paused. There is no takeover or hand-back button.
 7. Approve the example output or end the run. Computers and files remain available for another conversation.
 
+### File attachments
+
+Use **+ → Attach files** to choose files, then remove any unwanted chips before sending. File-only messages are supported. Up to eight files, 10 MB each and 25 MB total, are saved locally in IndexedDB; conversation metadata stays in the existing store. Click a sent attachment to download it. Files are workspace-scoped and are **not uploaded or read by an agent** in this prototype. Replace `lib/chat-attachments.ts` with authenticated object storage when connecting the backend.
+
 ### Computer mentions and permissions
 
 Type `@` to search your workspace computers, then select one with the keyboard or pointer. Names appear as blue inline mentions such as `@Development` in the composer and soft blue pills in sent messages. Full names (including spaces) resolve to computer IDs; older quoted mentions are still supported. Ambiguous duplicate names never grant access. A mention requests access—it does not grant it. Allow or deny access for that conversation in the agent response.
 
 Open **Conversation settings (···)** for project/agent setup and computer permissions. The default policy is to ask first. You can explicitly opt into **Allow available workspace computers** for the current conversation. The agent can then select an available machine through **+ → Let agent choose**, or a subsequent message when none is assigned. Human-controlled computers still require approval, busy computers cannot be reassigned, and the policy can be switched back to asking. Ending a run releases its assignments but preserves the machines and files.
 
-Agent responses render Markdown, lists, code, and tables. Expandable tool cards show demo commands, searches, file actions, inputs, and output. No commands or searches run externally in this prototype.
+Agent identity and its activity orb appear within the conversation, not in a duplicate header. Conversation settings live beside the composer. Agent responses render Markdown, lists, code, and tables. Expandable tool cards show demo commands, searches, file actions, inputs, and output. No commands or searches run externally in this prototype.
 
 The demo shell supports `help`, `pwd`, `ls`, `cat <filename>`, `uname`, and `clear`. The browser preview validates an address without loading external pages.
 
 **⌘K / Ctrl+K** searches projects, computers, and conversations, and opens agent skills, scheduled work, and settings. Arrow keys select; Enter opens; Escape dismisses.
 
-Collapse the sidebar with its top toggle or **⌘\\ / Ctrl+\\**. The sidebar disappears completely; a title-bar button restores it, and ⌘K search remains available. The layout preference is remembered locally. Empty conversations offer editable starter prompts, and sessions without computers offer inline provisioning.
+Collapse the sidebar with its top toggle or **⌘\\ / Ctrl+\\**. The sidebar disappears completely; a floating window-control button restores it, and ⌘K search remains available. The layout preference is remembered locally. Empty conversations offer editable starter prompts, and sessions without computers offer inline provisioning.
 
-The sidebar keeps New conversation and Computers, collapsible projects, Recents, and the workspace/profile switcher. The plus beside each project creates a session immediately; the first message names it. Sessions appear within their project. When a session uses multiple computers, a compact tab strip switches between just those computers. Agent management remains in conversation settings and ⌘K. The agent panel persists across pages, can collapse, and resizes with a drag or arrow keys on its separator.
+The sidebar keeps New conversation and Computers, collapsible projects, Recents, and the workspace/profile switcher. The plus beside each project creates a session immediately; the first message names it. Folders start open; clicking anywhere on a folder row opens or closes it. All sessions appear within their project. When a session uses multiple computers, a compact tab strip switches between just those computers. Agent management remains in conversation settings and ⌘K. The agent panel persists across pages and resizes with a drag or arrow keys on its separator.
 
 ## Code map
 

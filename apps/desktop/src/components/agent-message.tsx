@@ -1,5 +1,7 @@
 import { computerMentionParts, computerMention } from "@/lib/computer-mentions";
 import { workspaceComputers } from "@/lib/orbit-selectors";
+import { MessageAttachments } from "./message-attachments";
+import { AgentOrb, type AgentPhase } from "./agent-orb";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Task } from "@/lib/orbit-store";
@@ -10,10 +12,12 @@ export function AgentMessage({
   message,
   agentName,
   showAuthor = true,
+  phase = "idle",
 }: {
   message: Task["messages"][number];
   agentName: string;
   showAuthor?: boolean;
+  phase?: AgentPhase;
 }) {
   const state = useOrbit();
   if (message.role === "user")
@@ -32,8 +36,21 @@ export function AgentMessage({
               part.text
             ),
         )}
+        <MessageAttachments
+          files={message.attachments ?? []}
+          workspaceId={state.workspaceId}
+        />
       </div>
     );
+  const identity = showAuthor ? (
+    <div
+      className="mb-3 flex items-center gap-2.5"
+      aria-label={agentName + " · " + phase}
+    >
+      <AgentOrb phase={phase} />
+      <span className="text-xs font-medium text-zinc-200">{agentName}</span>
+    </div>
+  ) : null;
   if (message.tool) {
     const tool = message.tool;
     const Icon = {
@@ -42,35 +59,36 @@ export function AgentMessage({
       files: FileText,
     }[tool.name];
     return (
-      <details className="group overflow-hidden rounded-lg bg-white/[0.025]">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-3 text-xs text-zinc-400">
-          <Icon className="size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{message.content}</span>
-          <span className="text-[10px] text-zinc-600">Demo</span>
-          <CaretRight className="size-3 transition-transform group-open:rotate-90" />
-        </summary>
-        <div className="px-3 pb-3">
-          <p className="mb-2 text-[10px] text-zinc-500">
-            {state.machines.find((m) => m.id === tool.machineId)?.name ??
-              "Agent"}{" "}
-            · {tool.name}
-          </p>
-          <pre className="overflow-x-auto rounded-lg bg-black/20 p-3 text-[11px] leading-5 text-zinc-300">
-            {tool.name === "terminal" ? "$ " : ""}
-            {tool.input}
-          </pre>
-          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words px-1 text-[11px] leading-5 text-zinc-500">
-            {tool.output}
-          </pre>
-        </div>
-      </details>
+      <div>
+        {identity}
+        <details className="group overflow-hidden rounded-lg bg-white/[0.025]">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-3 text-xs text-zinc-400">
+            <Icon className="size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{message.content}</span>
+            <span className="text-[10px] text-zinc-600">Demo</span>
+            <CaretRight className="size-3 transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="px-3 pb-3">
+            <p className="mb-2 text-[10px] text-zinc-500">
+              {state.machines.find((m) => m.id === tool.machineId)?.name ??
+                "Agent"}{" "}
+              · {tool.name}
+            </p>
+            <pre className="overflow-x-auto rounded-lg bg-black/20 p-3 text-[11px] leading-5 text-zinc-300">
+              {tool.name === "terminal" ? "$ " : ""}
+              {tool.input}
+            </pre>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words px-1 text-[11px] leading-5 text-zinc-500">
+              {tool.output}
+            </pre>
+          </div>
+        </details>
+      </div>
     );
   }
   return (
     <div className="text-sm leading-6 text-zinc-400">
-      {showAuthor && (
-        <p className="mb-2 text-xs font-medium text-zinc-200">{agentName}</p>
-      )}
+      {identity}
       <div className="agent-markdown">
         <Markdown
           remarkPlugins={[remarkGfm]}

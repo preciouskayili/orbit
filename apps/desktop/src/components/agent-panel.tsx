@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  FileText,
+  X,
   ArrowUp,
-  CaretRight,
   DotsThree,
   Monitor,
   Plus,
   Robot,
-  SidebarSimple,
 } from "./ui/icons";
 import { Button } from "./ui/button";
 import { SelectControl } from "./ui/select";
@@ -31,24 +31,33 @@ import { OsLogo } from "./os-logo";
 import { ComputerMentionInput } from "./computer-mention-input";
 import { AgentMessage } from "./agent-message";
 import { AgentWelcome } from "./agent-welcome";
-import { AgentOrb } from "./agent-orb";
 import { useOrbit } from "@/hooks/use-orbit";
 import { useAgentPreview } from "@/hooks/use-agent-preview";
 import { workspaceComputers } from "@/lib/orbit-selectors";
 import { mentionedComputers } from "@/lib/computer-mentions";
+import {
+  saveAttachments,
+  removeAttachments,
+  validateAttachments,
+  fileSize,
+  type ChatAttachment,
+} from "@/lib/chat-attachments";
 import { orbitActions } from "@/lib/orbit-store";
 
 export function AgentPanel({
   projectId: routeProjectId,
   width,
-  collapsed,
-  onToggle,
+  floatingControls = false,
 }: {
   projectId: string;
   width: number;
-  collapsed: boolean;
-  onToggle: () => void;
+  floatingControls?: boolean;
 }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const contextRef = useRef("");
   const composer = useRef<HTMLTextAreaElement>(null);
   const state = useOrbit();
   const navigate = useNavigate();
@@ -98,8 +107,20 @@ export function AgentPanel({
   const ended = Boolean(
     conversation && ["completed", "cancelled"].includes(conversation.status),
   );
+  contextRef.current = state.workspaceId + ":" + (conversation?.id ?? "new");
+  useEffect(
+    () => () => {
+      contextRef.current = "";
+    },
+    [],
+  );
   const pending =
     conversation?.requests.filter((r) => r.status === "pending") ?? [];
+  const lastUserMessageIndex =
+    conversation?.messages.reduce(
+      (last, message, index) => (message.role === "user" ? index : last),
+      -1,
+    ) ?? -1;
   const preview = useAgentPreview(conversation, setError);
   const status = interacting
     ? "You’re interacting · agent is waiting"
@@ -127,6 +148,7 @@ export function AgentPanel({
   }, [conversation?.messages.length, conversation?.id]);
   useEffect(() => {
     setDraft("");
+    setFiles([]);
     setError("");
     setSettingsOpen(false);
     setCreateOpen(false);
@@ -155,66 +177,89 @@ export function AgentPanel({
       navigate("/computers/" + ids[0]);
     });
   }
-  function send() {
-    act(() => {
-      if (!draft.trim() || !projectId || !agentId) return;
-      const mentions = mentionedComputers(draft, allComputers);
-      if (conversation) orbitActions.message(conversation.id, draft, mentions);
-      else
-        navigate(
-          "/sessions/" +
-            orbitActions.createConversation(
-              projectId,
-              agentId,
-              draft,
-              mentions,
-            ),
-        );
-      setDraft("");
-    });
+  function selectFiles(selected: FileList | null) {
+    if (!selected) return;
+    try {
+      const next = [...files];
+      for (const file of Array.from(selected)) {
+        if (
+          !next.some(
+            (existing) =>
+              existing.name === file.name &&
+              existing.size === file.size &&
+              existing.lastModified === file.lastModified,
+          )
+        )
+          next.push(file);
+      }
+      validateAttachments(next);
+      setFiles(next);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    if (fileInput.current) fileInput.current.value = "";
   }
-  if (collapsed)
-    return (
-      <aside className="w-12 shrink-0 bg-[#181818] p-2 pt-4">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onToggle}
-          aria-label="Show agent"
-        >
-          <CaretRight className="size-4" />
-        </Button>
-      </aside>
-    );
+  async function send() {
+    if (
+      sendingRef.current ||
+      (!draft.trim() && !files.length) ||
+      !projectId ||
+      !agentId
+    )
+      return;
+    const context = contextRef.current;
+    const workspaceId = state.workspaceId;
+    let saved: ChatAttachment[] = [];
+    let committed = false;
+    sendingRef.current = true;
+    setSending(true);
+    try {
+      saved = files.length ? await saveAttachments(workspaceId, files) : [];
+      if (contextRef.current !== context) {
+        await removeAttachments(workspaceId, saved);
+        return;
+      }
+      const content = draft.trim() || "Review the attached files.";
+      const mentions = mentionedComputers(content, allComputers);
+      if (conversation)
+        orbitActions.message(conversation.id, content, mentions, saved);
+      else {
+        const id = orbitActions.createConversation(
+          projectId,
+          agentId,
+          content,
+          mentions,
+          saved,
+        );
+        navigate("/sessions/" + id);
+      }
+      committed = true;
+      setDraft("");
+      setFiles([]);
+      setError("");
+    } catch (e) {
+      if (!committed)
+        await removeAttachments(workspaceId, saved).catch(() => {});
+      if (contextRef.current === context) setError((e as Error).message);
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }
   return (
     <aside
       style={{ width }}
       className="flex min-h-0 min-w-[360px] shrink-0 flex-col bg-[#181818]"
     >
-      <header className="window-drag flex h-[54px] shrink-0 items-center gap-2.5 px-4">
-        {conversation && (
-          <AgentOrb phase={interacting ? "waiting" : preview.phase} />
-        )}
-        <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">
-          {conversation ? agentName : "Agent"}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Conversation settings"
-          onClick={() => setSettingsOpen(true)}
-        >
-          <DotsThree className="size-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onToggle}
-          aria-label="Hide agent"
-        >
-          <SidebarSimple className="size-4" />
-        </Button>
-      </header>
+      <div
+        aria-hidden="true"
+        className={
+          "h-[54px] shrink-0 " + (floatingControls ? "pl-[184px]" : "")
+        }
+      >
+        <div className="window-drag h-full" />
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         {!conversation?.messages.length ? (
           <div className="flex min-h-full flex-col justify-center py-10">
@@ -253,6 +298,13 @@ export function AgentPanel({
                 key={index}
                 message={message}
                 agentName={agentName}
+                phase={
+                  index > lastUserMessageIndex
+                    ? interacting
+                      ? "waiting"
+                      : preview.phase
+                    : "idle"
+                }
                 showAuthor={
                   index === 0 ||
                   conversation.messages[index - 1]?.role === "user"
@@ -365,8 +417,50 @@ export function AgentPanel({
             send();
           }}
         >
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            hidden
+            aria-label="Attach files"
+            disabled={sending}
+            onChange={(event) => selectFiles(event.target.files)}
+          />
+          {files.length > 0 && (
+            <div className="mb-3 space-y-1.5" aria-label="Pending attachments">
+              {files.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2 text-xs text-zinc-300"
+                >
+                  <FileText className="size-4 shrink-0 text-zinc-500" />
+                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                  <span className="text-[10px] text-zinc-500">
+                    {fileSize(file.size)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={"Remove " + file.name}
+                    disabled={sending}
+                    onClick={() =>
+                      setFiles((current) =>
+                        current.filter((_, i) => i !== index),
+                      )
+                    }
+                    className="rounded p-1 hover:bg-white/10"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+              <p className="px-1 text-[10px] text-zinc-500">
+                Stored locally · not uploaded to an agent
+              </p>
+            </div>
+          )}
           <ComputerMentionInput
             inputRef={composer}
+            disabled={sending}
             value={draft}
             onChange={setDraft}
             onSend={send}
@@ -379,19 +473,28 @@ export function AgentPanel({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    disabled={!projectId || !agentId || ended}
+                    type="button"
+                    disabled={sending}
                   />
                 }
-                aria-label="Add computer"
+                aria-label="Add attachments or computers"
               >
                 <Plus className="size-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-64">
-                <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+                <DropdownMenuItem onClick={() => fileInput.current?.click()}>
+                  <FileText className="size-4" />
+                  Attach files
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!projectId || !agentId || ended}
+                  onClick={() => setCreateOpen(true)}
+                >
                   <Plus className="size-4" />
                   New computer
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  disabled={!projectId || !agentId || ended}
                   onClick={() =>
                     act(() =>
                       orbitActions.requestAvailableComputer(
@@ -423,6 +526,7 @@ export function AgentPanel({
                     available.map((m) => (
                       <DropdownMenuItem
                         key={m.id}
+                        disabled={!projectId || !agentId || ended}
                         onClick={() => attach([m.id])}
                       >
                         <OsLogo os={m.os} className="size-4" />
@@ -444,11 +548,26 @@ export function AgentPanel({
               )}
             </span>
             <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label="Conversation settings"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <DotsThree className="size-5" />
+            </Button>
+            <Button
               type="submit"
               size="icon-sm"
-              className="ml-auto rounded-full"
+              className="rounded-full"
               aria-label="Send message"
-              disabled={!draft.trim() || !projectId || !agentId}
+              disabled={
+                sending ||
+                (!draft.trim() && !files.length) ||
+                !projectId ||
+                !agentId
+              }
             >
               <ArrowUp className="size-4" />
             </Button>
