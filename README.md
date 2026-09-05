@@ -98,7 +98,7 @@ Use the small components in `src/components/ui`. They follow the existing shadcn
 
 The compact prompt, folded tool rows, approval cards, and screen-first layout take cues from [Beautiful UI](https://www.beautifului.dev/). The MIT-licensed [Thinking Orbs](https://libraries.dev/orbs) package supplies the animated activity indicator; only active preview execution animates, and reduced-motion preferences pause it.
 
-Use Phosphor icons through `ui/icons.ts`, OS marks through `OsLogo`, and custom `SelectControl` / `Checkbox` components instead of native selects and checkboxes. Favor surface colors over extra borders. SF Pro comes from the macOS system font; variable Inter is bundled as the fallback.
+Use Phosphor icons by default through `ui/icons.ts`. Lucide is a fallback only when the desired shape is unavailable in Phosphor; explicitly export each fallback from the same file. New conversation uses Lucide’s `SquarePen`. Use OS marks through `OsLogo`, and custom `SelectControl` / `Checkbox` components instead of native selects and checkboxes. Favor surface colors over extra borders. SF Pro comes from the macOS system font; variable Inter is bundled as the fallback.
 
 The sidebar's scrollbar stays at the outer edge. Its content padding compensates for the reserved scrollbar width; avoid adding right padding to the scroll container.
 

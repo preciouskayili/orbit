@@ -58,3 +58,7 @@ export { TerminalWindow } from "@phosphor-icons/react/TerminalWindow";
 export { UserCircle } from "@phosphor-icons/react/UserCircle";
 export { WarningCircle } from "@phosphor-icons/react/WarningCircle";
 export { X } from "@phosphor-icons/react/X";
+
+// Lucide is a fallback for specific shapes only. Keep Phosphor as the default;
+// add explicit named exports here instead of importing the whole icon library.
+export { SquarePen } from "lucide-react";

@@ -13,7 +13,7 @@ import {
   MagnifyingGlass,
   Monitor,
   Plus,
-  ChatCircleDots,
+  SquarePen,
 } from "@/components/ui/icons";
 import {
   DropdownMenu,
@@ -36,7 +36,7 @@ import { projectComputers } from "@/lib/orbit-selectors";
 import { orbitActions } from "@/lib/orbit-store";
 
 const navigation = [
-  { label: "New conversation", path: "/new", icon: ChatCircleDots },
+  { label: "New conversation", path: "/new", icon: SquarePen },
   { label: "Computers", path: "/computers", icon: Monitor },
 ];
 export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
@@ -131,7 +131,11 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                     : " text-zinc-400")
                 }
               >
-                <item.icon className="size-3.5" />
+                {item.icon === SquarePen ? (
+                  <SquarePen className="size-3.5" strokeWidth={1.5} />
+                ) : (
+                  <item.icon className="size-3.5" />
+                )}
                 {item.label}
               </Link>
             ))}
