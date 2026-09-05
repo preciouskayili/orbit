@@ -1,3 +1,4 @@
+import { cloudComputersEnabled } from "./computer-config";
 import { attachmentSchema, type ChatAttachment } from "./chat-attachments";
 import { z } from "zod";
 import {
@@ -7,6 +8,7 @@ import {
   MachineSchema,
   ProjectSchema,
   type CreateMachineInput,
+  type Machine,
 } from "@orbit/shared";
 import * as seed from "./demo-seed";
 
@@ -286,7 +288,7 @@ function machineInWorkspace(draft: OrbitState, machineId: string) {
   const workspaceId =
     machine?.workspaceId ??
     draft.projects.find((p) => p.id === machine?.projectId)?.workspaceId;
-  if (!machine || workspaceId !== draft.workspaceId)
+  if (!machine || workspaceId !== draft.workspaceId || (cloudComputersEnabled ? machine.provider !== "daytona" : Boolean(machine.provider)))
     throw new Error("Computer is not in the current workspace.");
   return machine;
 }
@@ -365,6 +367,7 @@ function provision(
     while (
       draft.machines.some(
         (m) =>
+          (cloudComputersEnabled ? m.provider === "daytona" : !m.provider) &&
           (m.workspaceId ??
             draft.projects.find((p) => p.id === m.projectId)?.workspaceId) ===
             draft.workspaceId && m.name === name,
@@ -495,6 +498,25 @@ export const orbitActions = {
     });
     return projectId;
   },
+  receiveCloudComputer(workspaceId: string, machine: Machine) {
+    const parsed = MachineSchema.parse(machine);
+    if (parsed.provider !== "daytona" || parsed.workspaceId !== workspaceId) throw new Error("Invalid computer ownership.");
+    update((d) => {
+      if (!d.workspaces.some((w) => w.id === workspaceId)) return;
+      const index = d.machines.findIndex((m) => m.id === parsed.id);
+      if (index >= 0) d.machines[index] = parsed;
+      else d.machines.push(parsed);
+    });
+  },
+  reconcileCloudComputers(workspaceId: string, machines: Machine[]) {
+    const parsed = machines.map((machine) => MachineSchema.parse(machine));
+    if (parsed.some((m) => m.provider !== "daytona" || m.workspaceId !== workspaceId)) throw new Error("Invalid computer ownership.");
+    update((d) => {
+      if (!d.workspaces.some((w) => w.id === workspaceId)) return;
+      d.machines = d.machines.filter((m) => m.provider !== "daytona" || m.workspaceId !== workspaceId);
+      d.machines.push(...parsed);
+    });
+  },
   createComputers(input: CreateMachineInput, count = 1) {
     let created: string[] = [];
     update((d) => {
@@ -516,6 +538,7 @@ export const orbitActions = {
       const machine = d.machines.find((m) => m.id === machineId);
       if (!machine) throw new Error("Computer not found.");
       machineInWorkspace(d, machine.id);
+      if (machine.provider === "daytona") throw new Error("Use the computers API for this computer.");
       machine.status = status;
       machine.lastSeenAt = now();
       if (status === "stopped")
@@ -788,6 +811,7 @@ export const orbitActions = {
       ) {
         const machine = d.machines.find(
           (m) =>
+            (cloudComputersEnabled ? m.provider === "daytona" : !m.provider) &&
             (m.workspaceId ??
               d.projects.find((p) => p.id === m.projectId)?.workspaceId) ===
               d.workspaceId &&
@@ -812,6 +836,7 @@ export const orbitActions = {
       const conversation = taskInWorkspace(d, conversationId);
       const machine = d.machines.find(
         (m) =>
+          (cloudComputersEnabled ? m.provider === "daytona" : !m.provider) &&
           (m.workspaceId ??
             d.projects.find((p) => p.id === m.projectId)?.workspaceId) ===
             d.workspaceId &&

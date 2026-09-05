@@ -1,106 +1,28 @@
-import cors from "cors";
-import express from "express";
-import {
-  CreateMachineInputSchema,
-  MachineSchema,
-  type Machine,
-  type MachineOS,
-} from "@orbit/shared";
-import { activity, machines, messages, projects } from "./data.js";
+import "dotenv/config";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { Daytona } from "@daytona/sdk";
+import { createApp } from "./app.js";
+import { DaytonaComputers } from "./computers/service.js";
 
-const app = express();
 const port = Number(process.env.API_PORT ?? 4000);
-
-app.disable("x-powered-by");
-app.use(cors({ origin: true }));
-app.use(express.json());
-
-app.get("/health", (_request, response) => {
-  response.json({ status: "ok", service: "orbit-api" });
-});
-
-app.get("/api/projects", (_request, response) => {
-  response.json(projects);
-});
-
-app.get("/api/projects/:id", (request, response) => {
-  const project = projects.find(
-    (candidate) => candidate.id === request.params.id,
-  );
-  if (!project)
-    return response.status(404).json({ message: "Project not found" });
-  return response.json(project);
-});
-
-app.get("/api/projects/:id/machines", (request, response) => {
-  response.json(
-    machines.filter((machine) => machine.projectId === request.params.id),
-  );
-});
-
-app.post("/api/projects/:id/machines", (request, response) => {
-  const project = projects.find(
-    (candidate) => candidate.id === request.params.id,
-  );
-  if (!project)
-    return response.status(404).json({ message: "Project not found" });
-
-  const parsed = CreateMachineInputSchema.safeParse(request.body);
-  if (!parsed.success) {
-    return response.status(400).json({
-      message: "Invalid machine configuration",
-      issues: parsed.error.issues,
-    });
-  }
-
-  const osLabels: Record<MachineOS, string> = {
-    ubuntu: "Ubuntu 24.04",
-    windows: "Windows 11",
-    macos: "macOS",
-  };
-  const machine: Machine = MachineSchema.parse({
-    id: `${parsed.data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`,
-    projectId: project.id,
-    name: parsed.data.name,
-    os: parsed.data.os,
-    osLabel: osLabels[parsed.data.os],
-    status: "stopped",
-    cpu: parsed.data.cpu,
-    ramGb: parsed.data.ramGb,
-    storageGb: parsed.data.storageGb,
-    lastSeenAt: new Date().toISOString(),
-  });
-  machines.push(machine);
-  project.machineCount += 1;
-  project.updatedAt = new Date().toISOString();
-  return response.status(201).json(machine);
-});
-
-app.get("/api/machines/:id", (request, response) => {
-  const machine = machines.find(
-    (candidate) => candidate.id === request.params.id,
-  );
-  if (!machine)
-    return response.status(404).json({ message: "Machine not found" });
-  return response.json(machine);
-});
-
-app.get("/api/projects/:id/activity", (request, response) => {
-  response.json(
-    activity.filter((event) => event.projectId === request.params.id),
-  );
-});
-
-app.get("/api/projects/:id/messages", (request, response) => {
-  response.json(
-    messages.filter((message) => message.projectId === request.params.id),
-  );
-});
-
-app.use((_request, response) => {
-  response.status(404).json({ message: "Route not found" });
-});
-
+const workspaceId = process.env.ORBIT_WORKSPACE_ID || "personal";
+const directory = resolve(process.env.ORBIT_DATA_DIR || ".data");
+mkdirSync(directory, { recursive: true });
+const instanceFile = resolve(directory, "instance-id");
+try { writeFileSync(instanceFile, randomUUID(), { flag: "wx", mode: 0o600 }); }
+catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+const instanceId = readFileSync(instanceFile, "utf8").trim();
+const autoStopMinutes = Number(process.env.DAYTONA_AUTO_STOP_MINUTES ?? 30);
+const vncPort = Number(process.env.DAYTONA_VNC_PORT ?? 6080);
+if (!Number.isInteger(autoStopMinutes) || autoStopMinutes < 0) throw new Error("DAYTONA_AUTO_STOP_MINUTES must be a nonnegative integer.");
+if (!Number.isInteger(vncPort) || vncPort < 1 || vncPort > 65535) throw new Error("Invalid DAYTONA_VNC_PORT.");
+const service = process.env.DAYTONA_API_KEY ? new DaytonaComputers(new Daytona({ requestTimeoutMs: 30_000 }), {
+  workspaceId, instanceId, autoStopMinutes, vncPort,
+  image: process.env.DAYTONA_DESKTOP_IMAGE || "daytonaio/sandbox:0.6.0",
+}) : undefined;
+const app = createApp({ service, token: process.env.ORBIT_API_TOKEN, workspaceId });
 app.listen(port, "127.0.0.1", () => {
-  console.log(`[orbit-api] listening on http://127.0.0.1:${port}`);
+  console.log(`[orbit-api] listening on http://127.0.0.1:${port}; computers: ${service ? "Daytona" : "not configured"}`);
 });

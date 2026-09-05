@@ -1,152 +1,192 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  getDocument,
-  GlobalWorkerOptions,
-  type PDFDocumentProxy,
-} from "pdfjs-dist/legacy/build/pdf.mjs";
-// Electron 37 needs the compatibility build in both the viewer and worker.
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { EventBus, PDFViewer } from "pdfjs-dist/legacy/web/pdf_viewer.mjs";
+// Keep both PDF.js bundles compatible with the app's Electron runtime.
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import "pdfjs-dist/web/pdf_viewer.css";
 import { Button } from "./ui/button";
+import { MagnifyingGlass, X } from "./ui/icons";
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 export default function PdfPreview({ blob }: { blob: Blob }) {
-  const [document, setDocument] = useState<PDFDocumentProxy>();
-  const [page, setPage] = useState(1);
+  const container = useRef<HTMLDivElement>(null);
+  const pages = useRef<HTMLDivElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const runtime = useRef<{ viewer: PDFViewer; bus: EventBus } | undefined>(undefined);
   const [error, setError] = useState("");
-  const [rendering, setRendering] = useState(true);
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const frame = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(640);
+  const [ready, setReady] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(0);
+  const [scale, setScale] = useState(1);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    const measure = () =>
-      setWidth(
-        Math.max(160, Math.min(800, (frame.current?.clientWidth || 688) - 48)),
-      );
-    measure();
-    const observer = new ResizeObserver(measure);
-    if (frame.current) observer.observe(frame.current);
-    return () => observer.disconnect();
-  }, []);
+    if (searchOpen) searchInput.current?.focus();
+  }, [searchOpen]);
+  const [matches, setMatches] = useState({ current: 0, total: 0 });
+  const [searching, setSearching] = useState(false);
+
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+    const { signal } = controller;
     let loading: ReturnType<typeof getDocument> | undefined;
-    setDocument(undefined);
-    setPage(1);
+    let viewer: PDFViewer | undefined;
+    let resize: ResizeObserver | undefined;
     setError("");
-    void blob
-      .arrayBuffer()
-      .then((data) => {
-        if (!active) return;
-        loading = getDocument({
-          data,
-          useSystemFonts: true,
-        });
-        return loading.promise.then((doc) => {
-          if (active) setDocument(doc);
-        });
-      })
-      .catch((cause: unknown) => {
-        if (!active) return;
-        const name = cause instanceof Error ? cause.name : "";
-        setError(
-          name === "PasswordException"
-            ? "This PDF requires a password. Download it to open it."
-            : name === "InvalidPDFException"
-              ? "This file could not be read as a PDF. Download it to check the original."
-              : "PDF preview unavailable. Download the original to open it.",
-        );
-        console.error("PDF preview failed", cause);
+    setReady(false);
+    setPage(1);
+    setPageCount(0);
+    setQuery("");
+    setSearchOpen(false);
+    setMatches({ current: 0, total: 0 });
+    setSearching(false);
+    void (async () => {
+      // The viewer reads pdfjsLib installed by the core import above.
+      const { PDFViewer, EventBus, PDFLinkService, PDFFindController } =
+        await import("pdfjs-dist/legacy/web/pdf_viewer.mjs");
+      if (signal.aborted || !container.current || !pages.current) return;
+      const bus = new EventBus();
+      const linkService = new PDFLinkService({ eventBus: bus });
+      const findController = new PDFFindController({ eventBus: bus, linkService });
+      // The runtime supports abortSignal; its published types omit this option.
+      const viewerOptions: ConstructorParameters<typeof PDFViewer>[0] & { abortSignal: AbortSignal } = {
+        container: container.current,
+        viewer: pages.current,
+        eventBus: bus,
+        linkService,
+        findController,
+        textLayerMode: 1,
+        annotationMode: 0,
+        enableAutoLinking: false,
+        abortSignal: signal,
+      };
+      viewer = new PDFViewer(viewerOptions);
+      linkService.setViewer(viewer);
+      runtime.current = { viewer, bus };
+      const options = { signal };
+      bus.on("pagesinit", () => {
+        if (signal.aborted || !viewer) return;
+        viewer.currentScaleValue = "page-width";
+        setReady(true);
+      }, options);
+      bus.on("pagechanging", ({ pageNumber }: { pageNumber: number }) => {
+        if (!signal.aborted) setPage(pageNumber);
+      }, options);
+      bus.on("scalechanging", ({ scale }: { scale: number }) => {
+        if (!signal.aborted) setScale(scale);
+      }, options);
+      bus.on("updatefindmatchescount", ({ matchesCount }: { matchesCount: typeof matches }) => {
+        if (!signal.aborted) setMatches(matchesCount);
+      }, options);
+      bus.on("updatefindcontrolstate", ({ state, matchesCount }: { state: number; matchesCount: typeof matches }) => {
+        if (signal.aborted) return;
+        setSearching(state === 3);
+        setMatches(matchesCount);
+      }, options);
+      bus.on("pagerendered", ({ error }: { error?: unknown }) => {
+        if (!signal.aborted && error) setError("This page could not be rendered. Download the original to open it.");
+      }, options);
+      resize = new ResizeObserver(() => {
+        if (viewer?.currentScaleValue === "page-width") viewer.currentScaleValue = "page-width";
       });
+      resize.observe(container.current);
+      const data = await blob.arrayBuffer();
+      if (signal.aborted) return;
+      loading = getDocument({ data, useSystemFonts: true });
+      const document = await loading.promise;
+      if (signal.aborted) return;
+      setPageCount(document.numPages);
+      linkService.setDocument(document);
+      viewer.setDocument(document);
+    })().catch((cause: unknown) => {
+      if (signal.aborted) return;
+      const name = cause instanceof Error ? cause.name : "";
+      setError(name === "PasswordException"
+        ? "This PDF requires a password. Download it to open it."
+        : name === "InvalidPDFException"
+          ? "This file could not be read as a PDF. Download it to check the original."
+          : "PDF preview unavailable. Download the original to open it.");
+      console.error("PDF preview failed", cause);
+    });
     return () => {
-      active = false;
+      controller.abort();
+      resize?.disconnect();
+      viewer?.setDocument(null!);
+      runtime.current = undefined;
       void loading?.destroy();
     };
   }, [blob]);
-  useEffect(() => {
-    if (!document) return;
-    let active = true;
-    let render:
-      | ReturnType<Awaited<ReturnType<PDFDocumentProxy["getPage"]>>["render"]>
-      | undefined;
-    setRendering(true);
-    void document
-      .getPage(page)
-      .then((pdfPage) => {
-        if (!active || !canvas.current) return;
-        const original = pdfPage.getViewport({ scale: 1 });
-        const scale = Math.min(width / original.width, 1600 / original.height);
-        const viewport = pdfPage.getViewport({ scale });
-        const ratio = Math.min(window.devicePixelRatio || 1, 2);
-        canvas.current.width = Math.floor(viewport.width * ratio);
-        canvas.current.height = Math.floor(viewport.height * ratio);
-        canvas.current.style.width = viewport.width + "px";
-        canvas.current.style.height = viewport.height + "px";
-        render = pdfPage.render({
-          canvas: canvas.current,
-          viewport,
-          transform: [ratio, 0, 0, ratio, 0, 0],
-        });
-        return render.promise;
-      })
-      .then(() => {
-        if (active) setRendering(false);
-      })
-      .catch(() => {
-        if (active) {
-          setError("This page could not be rendered.");
-          setRendering(false);
-        }
-      });
-    return () => {
-      active = false;
-      render?.cancel();
-    };
-  }, [document, page, width]);
+
+  function find(value: string, again = false, previous = false) {
+    runtime.current?.bus.dispatch("find", {
+      source: searchInput.current,
+      type: again ? "again" : "",
+      query: value,
+      caseSensitive: false,
+      entireWord: false,
+      highlightAll: true,
+      findPrevious: previous,
+      matchDiacritics: false,
+    });
+  }
+  function zoom(factor: number) {
+    const viewer = runtime.current?.viewer;
+    if (viewer) viewer.currentScale = Math.max(0.25, Math.min(4, viewer.currentScale * factor));
+  }
+  function closeSearch() {
+    setSearchOpen(false);
+    setQuery("");
+    find("");
+    runtime.current?.bus.dispatch("findbarclose", { source: searchInput.current });
+    searchButton.current?.focus();
+  }
   return (
-    <div ref={frame} className="flex h-full min-h-0 flex-col">
-      {document && (
-        <div className="flex shrink-0 items-center justify-center gap-4 py-3 text-xs text-zinc-400">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={page === 1}
-            onClick={() => setPage((p) => p - 1)}
-          >
-            Previous page
-          </Button>
-          <span>
-            Page {page} of {document.numPages}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={page === document.numPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next page
-          </Button>
-        </div>
-      )}
-      <div className="min-h-0 flex-1 overflow-auto p-6">
-        {error ? (
-          <p role="alert" className="text-sm text-zinc-400">
-            {error}
-          </p>
-        ) : (
-          <>
-            {rendering && (
-              <p role="status" className="mb-3 text-xs text-zinc-500">
-                Rendering PDF…
-              </p>
-            )}
-            <canvas
-              ref={canvas}
-              role="img"
-              aria-label={"PDF page " + page}
-              className="mx-auto bg-white shadow-xl"
-            />
-          </>
+    <div className="flex h-full min-h-0 flex-col" onKeyDown={(event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        event.stopPropagation();
+        setSearchOpen(true);
+        searchInput.current?.focus();
+        searchInput.current?.select();
+      }
+    }}>
+      <div role="toolbar" aria-label="PDF controls" className="flex h-8 shrink-0 items-center gap-0.5 px-3 text-[10px] text-zinc-500">
+        <span className="mr-auto tabular-nums" aria-label={pageCount ? `Page ${page} of ${pageCount}` : "PDF"}>
+          {pageCount ? `${page} / ${pageCount}` : "PDF"}
+        </span>
+        <Button variant="ghost" size="icon-xs" aria-label="Zoom out" title="Zoom out" disabled={!ready || scale <= 0.25} onClick={() => zoom(1 / 1.2)}>−</Button>
+        <span className="w-8 text-center tabular-nums" aria-label="Zoom level">{Math.round(scale * 100)}%</span>
+        <Button variant="ghost" size="icon-xs" aria-label="Zoom in" title="Zoom in" disabled={!ready || scale >= 4} onClick={() => zoom(1.2)}>+</Button>
+        <Button variant="ghost" size="xs" disabled={!ready} onClick={() => { if (runtime.current) runtime.current.viewer.currentScaleValue = "page-width"; }}>Fit width</Button>
+        <Button ref={searchButton} variant="ghost" size="icon-xs" aria-label="Find in PDF" title="Find in PDF (⌘/Ctrl+F)" aria-expanded={searchOpen} disabled={!ready}
+          onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}>
+          <MagnifyingGlass className="size-3.5" />
+        </Button>
+      </div>
+      {error && <p role="alert" className="p-4 text-sm text-zinc-400">{error}</p>}
+      {!ready && !error && <p role="status" className="p-4 text-xs text-zinc-500">Loading PDF…</p>}
+      <div className="relative min-h-0 flex-1">
+        {searchOpen && (
+          <div role="search" aria-label="Find in PDF" className="absolute right-3 top-2 z-10 flex max-w-[calc(100%-24px)] items-center gap-1 rounded-lg bg-[#292a2c] p-1 shadow-lg"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") { event.stopPropagation(); closeSearch(); }
+            }}>
+            <input ref={searchInput} type="search" aria-label="Search PDF" placeholder="Find…" disabled={!ready}
+              className="h-6 w-36 min-w-0 rounded bg-transparent px-2 text-[11px] text-zinc-200 outline-none focus:ring-1 focus:ring-zinc-500"
+              value={query} onChange={(event) => { setQuery(event.target.value); find(event.target.value); }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") { event.preventDefault(); find(query, true, event.shiftKey); }
+              }} />
+            {query && <span role="status" className="whitespace-nowrap px-1 text-[10px] tabular-nums text-zinc-400">{searching ? "…" : matches.total ? `${matches.current}/${matches.total}` : "No matches"}</span>}
+            <Button variant="ghost" size="icon-xs" aria-label="Previous match" title="Previous match" disabled={!ready || !query || !matches.total} onClick={() => find(query, true, true)}>↑</Button>
+            <Button variant="ghost" size="icon-xs" aria-label="Next match" title="Next match" disabled={!ready || !query || !matches.total} onClick={() => find(query, true)}>↓</Button>
+            <Button variant="ghost" size="icon-xs" aria-label="Close PDF search" title="Close search" onClick={closeSearch}><X className="size-3" /></Button>
+          </div>
         )}
+        <div ref={container} tabIndex={0} aria-label="PDF pages" className="absolute inset-0 overflow-auto outline-none">
+          <div ref={pages} className="pdfViewer" />
+        </div>
       </div>
     </div>
   );

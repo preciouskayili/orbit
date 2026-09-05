@@ -62,3 +62,5 @@ export { X } from "@phosphor-icons/react/X";
 // Lucide is a fallback for specific shapes only. Keep Phosphor as the default;
 // add explicit named exports here instead of importing the whole icon library.
 export { SquarePen } from "lucide-react";
+
+export { DownloadSimple } from "@phosphor-icons/react/DownloadSimple";

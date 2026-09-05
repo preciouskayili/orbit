@@ -1,3 +1,4 @@
+import { workspaceComputers } from "@/lib/orbit-selectors";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useOrbit } from "@/hooks/use-orbit";
 import { ComputerEmptyState } from "@/components/computer-empty-state";
@@ -21,7 +22,7 @@ export function ConversationWorkspacePage() {
       ),
   );
   if (!conversation) return <ComputerFleet />;
-  const computers = state.machines.filter((m) => conversation.machineIds.includes(m.id));
+  const computers = workspaceComputers(state).filter((m) => conversation.machineIds.includes(m.id));
   const machine = computers.find((m) => m.id === searchParams.get("computer")) ?? computers[0];
   if (!machine)
     return (

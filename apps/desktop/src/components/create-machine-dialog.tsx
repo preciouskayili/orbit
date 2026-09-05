@@ -1,4 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { cloudComputersEnabled } from "@/lib/computer-config";
+import { cloudComputers } from "@/lib/cloud-computers";
+import { getOrbitState } from "@/lib/orbit-store";
+import { useRef, useState, type FormEvent } from "react";
 import type { MachineOS } from "@orbit/shared";
 import { SelectControl } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -35,15 +38,30 @@ export function CreateMachineDialog({
   const setOpen = onOpenChange ?? setLocalOpen;
   const [name, setName] = useState("Development");
   const [os, setOS] = useState<MachineOS>("ubuntu");
-  const [cpu, setCPU] = useState(4);
-  const [ramGb, setRamGb] = useState(8);
-  const [storageGb, setStorageGb] = useState(80);
+  const [cpu, setCPU] = useState(cloudComputersEnabled ? 2 : 4);
+  const [ramGb, setRamGb] = useState(cloudComputersEnabled ? 4 : 8);
+  const [storageGb, setStorageGb] = useState(cloudComputersEnabled ? 10 : 80);
   const [count, setCount] = useState(1);
   const [error, setError] = useState("");
-  function submit(event: FormEvent) {
+  const [creating, setCreating] = useState(false);
+  const attempt = useRef<{ signature: string; requestIds: string[] } | undefined>(undefined);
+  async function submit(event: FormEvent) {
     event.preventDefault();
+    if (creating) return;
+    setCreating(true);
     try {
-      const ids = orbitActions.createComputers(
+      let ids: string[];
+      if (cloudComputersEnabled) {
+        const workspaceId = getOrbitState().workspaceId;
+        const signature = JSON.stringify({ workspaceId, name, os, cpu, ramGb, storageGb, count });
+        if (attempt.current?.signature !== signature) attempt.current = { signature, requestIds: Array.from({ length: count }, () => crypto.randomUUID()) };
+        ids = [];
+        for (let index = 0; index < count; index++) {
+          ids.push(await cloudComputers.create(workspaceId, { name: count > 1 ? `${name} ${index + 1}` : name, os, cpu, ramGb, storageGb }, attempt.current.requestIds[index]!));
+        }
+        attempt.current = undefined;
+        if (getOrbitState().workspaceId !== workspaceId) return;
+      } else ids = orbitActions.createComputers(
         { name, os, cpu, ramGb, storageGb },
         count,
       );
@@ -52,10 +70,10 @@ export function CreateMachineDialog({
       onCreated?.(ids);
     } catch (e) {
       setError((e as Error).message);
-    }
+    } finally { setCreating(false); }
   }
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(value) => { if (!creating) setOpen(value); }}>
       {!hideTrigger && (
         <DialogTrigger render={<Button size="sm" />}>
           New computer
@@ -67,6 +85,7 @@ export function CreateMachineDialog({
           One persistent workspace, or a fleet ready for parallel work.
         </DialogDescription>
         <form onSubmit={submit} className="mt-6 space-y-5">
+          <fieldset disabled={creating} className="space-y-5">
           <Field label="Computer name">
             <input
               className="flow-input"
@@ -86,6 +105,7 @@ export function CreateMachineDialog({
                 <button
                   key={item.value}
                   type="button"
+                  disabled={cloudComputersEnabled && item.value !== "ubuntu"}
                   aria-pressed={os === item.value}
                   onClick={() => setOS(item.value)}
                   className={
@@ -98,7 +118,7 @@ export function CreateMachineDialog({
                   <OsLogo os={item.value} className="size-6" />
                   <span className="text-sm text-zinc-200">{item.label}</span>
                   <span className="text-[11px] text-zinc-500">
-                    {item.detail}
+                    {cloudComputersEnabled ? item.value === "ubuntu" ? "Linux desktop" : "Not available yet" : item.detail}
                   </span>
                 </button>
               ))}
@@ -122,7 +142,7 @@ export function CreateMachineDialog({
             <Resource
               label="Disk"
               value={storageGb}
-              values={[40, 80, 120, 240]}
+              values={cloudComputersEnabled ? [5, 10] : [40, 80, 120, 240]}
               suffix="GB"
               change={setStorageGb}
             />
@@ -140,8 +160,7 @@ export function CreateMachineDialog({
           </Field>
           <p className="rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-zinc-500">
             {count} computers · {count * cpu} vCPU · {count * ramGb} GB memory
-            allocated. Computers and files persist between tasks. Provisioning
-            is simulated in this prototype.
+            allocated. {cloudComputersEnabled ? "Creates real Daytona computers. Files remain when stopped; running computers use your Daytona credits." : "Computers and files persist between tasks. Provisioning is simulated in this prototype."}
           </p>
           <ErrorNotice message={error} />
           <div className="flex justify-end gap-2">
@@ -149,9 +168,10 @@ export function CreateMachineDialog({
               Cancel
             </DialogClose>
             <Button type="submit">
-              Create {count === 1 ? "computer" : "fleet"}
+              {creating ? "Creating…" : `Create ${count === 1 ? "computer" : "fleet"}`}
             </Button>
           </div>
+          </fieldset>
         </form>
       </DialogContent>
     </Dialog>

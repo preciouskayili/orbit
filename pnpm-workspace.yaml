@@ -5,6 +5,7 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
+  protobufjs: false
 
 onlyBuiltDependencies:
   - better-sqlite3

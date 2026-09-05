@@ -25,6 +25,7 @@ export const MachineSchema = z.object({
   id: z.string(),
   // Computers belong to workspaces. projectId is a legacy creation hint only.
   workspaceId: z.string().optional(),
+  provider: z.literal("daytona").optional(),
   projectId: z.string(),
   name: z.string(),
   os: MachineOSSchema,
@@ -63,7 +64,7 @@ export const CreateMachineInputSchema = z.object({
   os: MachineOSSchema,
   cpu: z.coerce.number().int().min(1).max(32),
   ramGb: z.coerce.number().int().min(2).max(128),
-  storageGb: z.coerce.number().int().min(20).max(2048),
+  storageGb: z.coerce.number().int().min(1).max(2048),
 });
 export type CreateMachineInput = z.infer<typeof CreateMachineInputSchema>;
 
@@ -86,3 +87,13 @@ export interface OrbitDesktopAPI {
     feature: NativeFeature,
   ) => Promise<{ available: false; message: string }>;
 }
+
+export const CreateCloudComputerSchema = CreateMachineInputSchema.extend({
+  os: z.literal("ubuntu"),
+  requestId: z.string().uuid(),
+});
+export const DesktopSessionSchema = z.object({
+  url: z.string().url(),
+  expiresAt: z.string().datetime(),
+});
+export type DesktopSession = z.infer<typeof DesktopSessionSchema>;

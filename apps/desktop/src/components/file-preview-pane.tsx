@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { X } from "./ui/icons";
+import { DownloadSimple, X } from "./ui/icons";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -24,7 +24,7 @@ function Download({ selection }: { selection: FileSelection }) {
   return (
     <>
       <Button
-        size="sm"
+        size="xs"
         variant="ghost"
         onClick={() => {
           void downloadAttachment(selection.file, selection.workspaceId).catch(
@@ -32,6 +32,7 @@ function Download({ selection }: { selection: FileSelection }) {
           );
         }}
       >
+        <DownloadSimple className="size-3.5" />
         Download
       </Button>
       {error && (

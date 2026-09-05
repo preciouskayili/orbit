@@ -1,3 +1,5 @@
+import { cloudComputers } from "@/lib/cloud-computers";
+import { RemoteDesktop } from "./remote-desktop";
 import { useState, type FormEvent } from "react";
 import type { Machine } from "@orbit/shared";
 import { useDesktopInteraction } from "@/hooks/use-desktop-interaction";
@@ -31,23 +33,31 @@ export function MachineViewport({ machine, openMachineIds, onCloseComputer }: { 
   const [rename, setRename] = useState(false);
   const [name, setName] = useState(machine.name);
   const running = machine.status === "running";
+  const remote = machine.provider === "daytona";
+  const [busy, setBusy] = useState(false);
+  const transitional = machine.status === "starting" || machine.status === "stopping";
   const interaction = useDesktopInteraction(machine.id, running, setError);
   const human = state.control[machine.id] === "human";
-  const act = (fn: () => void) => {
+  const act = async (fn: () => void | Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
     try {
-      fn();
+      await fn();
       setError("");
     } catch (e) {
       setError((e as Error).message);
-    }
+    } finally { setBusy(false); }
   };
+  const changeStatus = () => remote
+    ? cloudComputers.status(machine.id, running ? "stop" : "start")
+    : orbitActions.machineStatus(machine.id, running ? "stopped" : "running");
   return (
     <section className="flex min-h-0 flex-1 flex-col">
       <div className="window-drag flex min-h-[64px] shrink-0 items-center gap-2 px-4 py-3">
         <div className="min-w-0 flex-1">
           <SessionComputerTabs machineId={machine.id} openMachineIds={openMachineIds} onCloseComputer={onCloseComputer} />
           <p className="mt-1 text-xs text-zinc-500">
-            {human
+            {remote ? "Live desktop · agent automation is not connected yet" : human
               ? "You’re interacting · agent yields automatically"
               : "Shared desktop · click or type to interact"}
           </p>
@@ -72,20 +82,11 @@ export function MachineViewport({ machine, openMachineIds, onCloseComputer }: { 
                     : value + " · fit desktop"}
                 </DropdownMenuItem>
               ))}
-              <DropdownMenuItem onClick={() => setRename(true)}>
+              <DropdownMenuItem disabled={busy} onClick={() => setRename(true)}>
                 Rename computer
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  act(() =>
-                    orbitActions.machineStatus(
-                      machine.id,
-                      running ? "stopped" : "running",
-                    ),
-                  )
-                }
-              >
-                {running ? "Stop computer" : "Start computer"}
+              <DropdownMenuItem disabled={busy || transitional} onClick={() => void act(changeStatus)}>
+                {busy || transitional ? "Updating computer…" : running ? "Stop computer" : "Start computer"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -97,7 +98,7 @@ export function MachineViewport({ machine, openMachineIds, onCloseComputer }: { 
         </div>
       )}
       <DesktopFrame aspect={aspect}>
-        <div {...interaction} className="h-full">
+        {remote ? <RemoteDesktop machine={machine} /> : <div {...interaction} className="h-full">
           <ComputerDesktop machine={machine} app={app} openApp={setApp}>
             {app === "Terminal" ? (
               <DemoTerminal machine={machine} enabled={running} />
@@ -107,19 +108,18 @@ export function MachineViewport({ machine, openMachineIds, onCloseComputer }: { 
               <DemoBrowser enabled={running} />
             )}
           </ComputerDesktop>
-        </div>
+        </div>}
         {!running && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/70 p-6 text-center backdrop-blur-sm">
             <Monitor className="size-7 text-zinc-500" />
-            <h2 className="text-sm text-zinc-200">Computer is stopped</h2>
+            <h2 className="text-sm text-zinc-200">{transitional ? "Computer is " + machine.status + "…" : machine.status === "error" ? "Computer needs attention" : "Computer is stopped"}</h2>
             <p className="max-w-sm text-xs leading-5 text-zinc-400">
               Your desktop and files are retained.
             </p>
             <Button
               size="sm"
-              onClick={() =>
-                act(() => orbitActions.machineStatus(machine.id, "running"))
-              }
+              disabled={busy || transitional}
+              onClick={() => void act(changeStatus)}
             >
               Start computer
             </Button>
@@ -134,10 +134,11 @@ export function MachineViewport({ machine, openMachineIds, onCloseComputer }: { 
           </DialogDescription>
           <form
             className="mt-5 space-y-4"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               try {
-                orbitActions.renameMachine(machine.id, name);
+                if (remote) await cloudComputers.rename(machine.id, name);
+                else orbitActions.renameMachine(machine.id, name);
                 setRename(false);
                 setError("");
               } catch (e) {

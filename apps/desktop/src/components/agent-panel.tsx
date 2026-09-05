@@ -1,3 +1,4 @@
+import { cloudComputersEnabled } from "@/lib/computer-config";
 import { AttachmentGrid } from "./attachment-grid";
 import { filePreview } from "@/lib/file-preview";
 import { useEffect, useRef, useState } from "react";
@@ -420,7 +421,7 @@ export function AgentPanel({
               >
                 Approve result
               </Button>
-            ) : !ended &&
+            ) : !cloudComputersEnabled && !ended &&
               !interacting &&
               computers.length > 0 &&
               pending.length === 0 ? (
@@ -581,7 +582,7 @@ export function AgentPanel({
           </div>
         </form>
         <p className="text-center text-[10px] text-zinc-600">
-          Local preview · cloud execution not connected
+          {cloudComputersEnabled ? "Live computers · agent not connected yet" : "Local preview · cloud execution not connected"}
         </p>
       </div>
       <CreateMachineDialog

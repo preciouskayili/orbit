@@ -1,8 +1,10 @@
+import { cloudComputersEnabled } from "./computer-config";
 import type { OrbitState } from "./orbit-store";
 
 export function workspaceComputers(state: OrbitState) {
   return state.machines.filter(
     (m) =>
+      (cloudComputersEnabled ? m.provider === "daytona" : !m.provider) &&
       (m.workspaceId ??
         state.projects.find((p) => p.id === m.projectId)?.workspaceId) ===
       state.workspaceId,
