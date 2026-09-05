@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { MachineOS } from "@orbit/shared";
+import { SelectControl } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { OsLogo } from "@/components/os-logo";
@@ -10,7 +11,7 @@ const operatingSystems = [
   { value: "windows" as const, label: "Windows", detail: "Windows 11" },
   { value: "macos" as const, label: "macOS", detail: "Apple silicon" },
 ];
-export function CreateMachineDialog({ projectId }: { projectId: string }) {
+export function CreateMachineDialog({ projectId, onCreated }: { projectId: string; onCreated?: (machineIds: string[]) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("Development");
   const [os, setOS] = useState<MachineOS>("ubuntu");
@@ -21,7 +22,7 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
   const [error, setError] = useState("");
   function submit(event: FormEvent) {
     event.preventDefault();
-    try { orbitActions.createFleet(projectId, { name, os, cpu, ramGb, storageGb }, count); setError(""); setOpen(false); }
+    try { const ids = orbitActions.createFleet(projectId, { name, os, cpu, ramGb, storageGb }, count); setError(""); setOpen(false); onCreated?.(ids); }
     catch (e) { setError((e as Error).message); }
   }
   return <Dialog open={open} onOpenChange={setOpen}>
@@ -41,5 +42,5 @@ export function CreateMachineDialog({ projectId }: { projectId: string }) {
   </Dialog>;
 }
 function Resource({ label, value, values, suffix, change }: { label: string; value: number; values: number[]; suffix: string; change: (value: number) => void }) {
-  return <Field label={label}><select className="flow-input" value={value} onChange={e => change(Number(e.target.value))}>{values.map(v => <option key={v} value={v}>{v} {suffix}</option>)}</select></Field>;
+  return <Field label={label}><SelectControl label={label} className="w-full" value={value} onValueChange={change} options={values.map(v => ({ value: v, label: v + " " + suffix }))} /></Field>;
 }

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateMachineInput } from "@orbit/shared";
+import { useOrbit } from "./use-orbit";
 import { orbitApi } from "@/lib/api";
 
 export const queryKeys = {
@@ -11,13 +12,18 @@ export const queryKeys = {
   messages: (projectId: string) => ["projects", projectId, "messages"] as const,
 };
 
+function useScopedKey(key: readonly string[]) {
+  const { workspaceId } = useOrbit();
+  return [workspaceId, ...key];
+}
+
 export function useProjects() {
-  return useQuery({ queryKey: queryKeys.projects, queryFn: orbitApi.projects });
+  return useQuery({ queryKey: useScopedKey(queryKeys.projects), queryFn: orbitApi.projects });
 }
 
 export function useProject(projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.project(projectId ?? ""),
+    queryKey: useScopedKey(queryKeys.project(projectId ?? "")),
     queryFn: () => orbitApi.project(projectId!),
     enabled: Boolean(projectId),
   });
@@ -25,7 +31,7 @@ export function useProject(projectId?: string) {
 
 export function useMachines(projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.machines(projectId ?? ""),
+    queryKey: useScopedKey(queryKeys.machines(projectId ?? "")),
     queryFn: () => orbitApi.machines(projectId!),
     enabled: Boolean(projectId),
   });
@@ -33,7 +39,7 @@ export function useMachines(projectId?: string) {
 
 export function useMachine(machineId?: string) {
   return useQuery({
-    queryKey: queryKeys.machine(machineId ?? ""),
+    queryKey: useScopedKey(queryKeys.machine(machineId ?? "")),
     queryFn: () => orbitApi.machine(machineId!),
     enabled: Boolean(machineId),
   });
@@ -41,7 +47,7 @@ export function useMachine(machineId?: string) {
 
 export function useActivity(projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.activity(projectId ?? ""),
+    queryKey: useScopedKey(queryKeys.activity(projectId ?? "")),
     queryFn: () => orbitApi.activity(projectId!),
     enabled: Boolean(projectId),
   });
@@ -49,7 +55,7 @@ export function useActivity(projectId?: string) {
 
 export function useAgentMessages(projectId?: string) {
   return useQuery({
-    queryKey: queryKeys.messages(projectId ?? ""),
+    queryKey: useScopedKey(queryKeys.messages(projectId ?? "")),
     queryFn: () => orbitApi.messages(projectId!),
     enabled: Boolean(projectId),
   });
@@ -57,13 +63,14 @@ export function useAgentMessages(projectId?: string) {
 
 export function useCreateMachine(projectId: string) {
   const queryClient = useQueryClient();
+  const { workspaceId } = useOrbit();
   return useMutation({
     mutationFn: (input: CreateMachineInput) => orbitApi.createMachine(projectId, input),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.projects }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.project(projectId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.machines(projectId) }),
+        queryClient.invalidateQueries({ queryKey: [workspaceId, ...queryKeys.projects] }),
+        queryClient.invalidateQueries({ queryKey: [workspaceId, ...queryKeys.project(projectId)] }),
+        queryClient.invalidateQueries({ queryKey: [workspaceId, ...queryKeys.machines(projectId)] }),
       ]);
     },
   });

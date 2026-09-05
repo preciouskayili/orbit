@@ -7,7 +7,8 @@ import { OsLogo } from "@/components/os-logo";
 import { Button } from "@/components/ui/button";
 import { ErrorNotice, Field } from "@/components/flow-ui";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { FileText, Globe, Terminal, Monitor } from "@/components/ui/icons";
+import { ComputerDesktop } from "./computer-desktop";
+import { Globe, Monitor } from "@/components/ui/icons";
 
 type App = "Desktop" | "Terminal" | "Files" | "Browser";
 export function MachineViewport({ machine }: { machine: Machine }) {
@@ -19,7 +20,6 @@ export function MachineViewport({ machine }: { machine: Machine }) {
   const running = machine.status === "running";
   const human = state.control[machine.id] === "human";
   const task = state.tasks.find(t => t.machineIds.includes(machine.id) && !["completed", "cancelled"].includes(t.status));
-  const events = state.activity.filter(a => a.machineId === machine.id).slice().reverse();
   const act = (fn: () => void) => { try { fn(); setError(""); } catch (e) { setError((e as Error).message); } };
   return <section className="flex min-h-0 flex-1 flex-col">
     <div className="flex flex-wrap items-center gap-2 px-5 py-4">
@@ -31,17 +31,14 @@ export function MachineViewport({ machine }: { machine: Machine }) {
       </div>
     </div>
     {error && <div className="px-5 pb-3"><ErrorNotice message={error} /></div>}
-    {task && <Link to={"/tasks/" + task.id} className="mx-5 mb-3 flex flex-wrap gap-2 rounded-lg bg-white/[0.035] px-3 py-2 text-xs text-zinc-400"><span className="text-[#db7657]">{task.status}</span><span className="min-w-0 flex-1 truncate">{task.title}</span><span>Open task →</span></Link>}
+    {task && <Link to={"/sessions/" + task.id} onClick={() => orbitActions.openConversation(task.id)} className="mx-5 mb-3 flex flex-wrap gap-2 rounded-lg bg-white/[0.035] px-3 py-2 text-xs text-zinc-400"><span className="text-[#db7657]">{task.status}</span><span className="min-w-0 flex-1 truncate">{task.title}</span><span>Conversation →</span></Link>}
     <div className="mx-5 flex flex-wrap items-center gap-1 rounded-t-xl bg-[#242526] p-2">
       {(["Desktop", "Terminal", "Files", "Browser"] as App[]).map(tab => <button key={tab} onClick={() => setApp(tab)} aria-pressed={app === tab} className={"rounded-lg px-3 py-2 text-xs " + (app === tab ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:bg-white/5")}>{tab}</button>)}
       <span className="ml-auto px-2 text-[11px] text-zinc-500">Demo session · {human ? "Human control" : "Agent control"}</span>
     </div>
     <div className="mx-5 mb-5 min-h-0 flex-1 overflow-auto rounded-b-xl bg-[#111313]">
       {!running ? <div className="flex min-h-[300px] h-full flex-col items-center justify-center gap-4 p-8 text-center"><Monitor className="size-9 text-zinc-600" /><h2 className="text-lg text-zinc-200">Computer is stopped</h2><p className="max-w-sm text-sm leading-6 text-zinc-500">Your files and workspace are retained. Start the computer to continue.</p><Button onClick={() => act(() => orbitActions.machineStatus(machine.id, "running"))}>Start computer</Button></div>
-      : app === "Desktop" ? <div className="p-6">
-        <div className="rounded-2xl bg-[#1c2022] p-6"><OsLogo os={machine.os} className="size-9" /><h2 className="mt-4 text-lg text-zinc-200">{machine.name} is ready</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Open an app below. Take control to explore the demo terminal or edit persistent files.</p><div className="mt-6 flex flex-wrap gap-3">{[{ title: "Terminal" as const, Icon: Terminal }, { title: "Files" as const, Icon: FileText }, { title: "Browser" as const, Icon: Globe }].map(({ title, Icon }) => <button key={title} onClick={() => setApp(title)} className="flex min-w-24 flex-col items-center gap-3 rounded-xl bg-white/5 p-5 text-xs text-zinc-300 hover:bg-white/10"><Icon className="size-6" />{title}</button>)}</div></div>
-        <h3 className="mb-3 mt-6 text-xs text-zinc-500">Computer activity</h3><div className="space-y-3">{events.slice(0, 8).map(event => <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 text-xs"><span className="text-zinc-400">{event.title}</span><time className="text-zinc-600">{new Date(event.timestamp).toLocaleTimeString()}</time></div>)}{!events.length && <p className="text-xs text-zinc-600">No activity recorded yet.</p>}</div>
-      </div>
+      : app === "Desktop" ? <ComputerDesktop machine={machine} openApp={setApp} />
       : app === "Terminal" ? <DemoTerminal machine={machine} enabled={human} />
       : app === "Files" ? <FileExplorer machine={machine} enabled={human} />
       : <DemoBrowser enabled={human} />}
@@ -73,10 +70,10 @@ function FileExplorer({ machine, enabled }: { machine: Machine; enabled: boolean
   const state = useOrbit();
   const files = state.files[machine.id] ?? {};
   const [name, setName] = useState(Object.keys(files)[0] ?? "notes.md");
-  const [content, setContent] = useState(files[Object.keys(files)[0]] ?? "");
+  const [content, setContent] = useState(files[Object.keys(files)[0] ?? ""] ?? "");
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
-  return <div className="p-5"><div className="mb-4 flex flex-wrap gap-2">{Object.keys(files).map(file => <button key={file} onClick={() => { setName(file); setContent(files[file]); setFeedback(""); }} className={"rounded-lg px-3 py-2 text-xs " + (file === name ? "bg-white/10 text-zinc-200" : "bg-white/5 text-zinc-500")}>{file}</button>)}<Button variant="ghost" size="sm" disabled={!enabled} onClick={() => { setName("untitled.md"); setContent(""); setFeedback(""); }}>New file</Button></div>
+  return <div className="p-5"><div className="mb-4 flex flex-wrap gap-2">{Object.keys(files).map(file => <button key={file} onClick={() => { setName(file); setContent(files[file] ?? ""); setFeedback(""); }} className={"rounded-lg px-3 py-2 text-xs " + (file === name ? "bg-white/10 text-zinc-200" : "bg-white/5 text-zinc-500")}>{file}</button>)}<Button variant="ghost" size="sm" disabled={!enabled} onClick={() => { setName("untitled.md"); setContent(""); setFeedback(""); }}>New file</Button></div>
     <div className="space-y-3"><Field label="Filename"><input className="flow-input" value={name} disabled={!enabled} onChange={e => setName(e.target.value)} /></Field><textarea aria-label="File contents" className="flow-input min-h-64 font-mono !text-xs !leading-6" readOnly={!enabled} value={content} onChange={e => { setContent(e.target.value); setFeedback(""); }} /><ErrorNotice message={error} /><div className="flex items-center gap-3"><Button disabled={!enabled || !name.trim()} onClick={() => { try { orbitActions.saveFile(machine.id, name, content); setError(""); setFeedback("Saved"); } catch (e) { setError((e as Error).message); } }}>Save file</Button><a href={"data:text/plain;charset=utf-8," + encodeURIComponent(content)} download={name} className="text-xs text-zinc-400 underline">Download</a><span role="status" className="text-xs text-emerald-300">{feedback}</span></div>{!enabled && <p className="text-xs text-zinc-600">Take control to edit files.</p>}</div>
   </div>;
 }

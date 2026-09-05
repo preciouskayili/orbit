@@ -7,6 +7,7 @@ import {
   Monitor,
   X,
 } from "@/components/ui/icons";
+import { SelectControl } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ComputerCard } from "@/components/computer-card";
 import { CreateMachineDialog } from "@/components/create-machine-dialog";
@@ -36,7 +37,7 @@ export function ProjectOverviewPage() {
   return <ComputerFleet key={projectId} projectId={projectId} />;
 }
 
-function ComputerFleet({ projectId }: { projectId: string }) {
+export function ComputerFleet({ projectId }: { projectId: string }) {
   const projectQuery = useProject(projectId);
   const machinesQuery = useMachines(projectId);
   const activityQuery = useActivity(projectId);
@@ -177,16 +178,7 @@ function ComputerFleet({ projectId }: { projectId: string }) {
                   </button>
                 )}
               </div>
-              <select
-                aria-label="Sort computers"
-                value={sort}
-                onChange={(event) => setSort(event.target.value as Sort)}
-                className="h-9 rounded-lg bg-[#222323] px-3 text-xs text-zinc-400 outline-none focus-visible:ring-2 focus-visible:ring-white/20"
-              >
-                <option value="status">Status first</option>
-                <option value="name">Name A–Z</option>
-                <option value="recent">Last seen</option>
-              </select>
+              <SelectControl<Sort> label="Sort computers" value={sort} onValueChange={setSort} options={[{ value: "status", label: "Status first" }, { value: "name", label: "Name A–Z" }, { value: "recent", label: "Last seen" }]} />
             </div>
             <div
               className="flex flex-wrap items-center gap-1"

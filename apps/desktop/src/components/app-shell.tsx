@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -6,6 +7,7 @@ import {
 import { Outlet, useLocation } from "react-router-dom";
 import { Sidebar } from "./sidebar";
 import { AgentPanel } from "./agent-panel";
+import { orbitActions } from "@/lib/orbit-store";
 import { useOrbit } from "@/hooks/use-orbit";
 
 const MIN_CONVERSATION_WIDTH = 400;
@@ -15,18 +17,30 @@ const DEFAULT_CONVERSATION_WIDTH = 480;
 export function AppShell() {
   const location = useLocation();
   const state = useOrbit();
-  const taskId = location.pathname.match(/^\/tasks\/([^/]+)/)?.[1];
+  const taskId = location.pathname.match(/^\/(?:tasks|sessions)\/([^/]+)/)?.[1];
   const task = state.tasks.find(
     (t) =>
-      t.id === taskId &&
+      t.id === (taskId ?? state.activeConversations[state.workspaceId]) &&
       state.projects.some(
         (p) => p.id === t.projectId && p.workspaceId === state.workspaceId,
       ),
   );
+  useEffect(() => { if (taskId && task) orbitActions.openConversation(taskId); }, [taskId, state.workspaceId]);
   const [agentCollapsed, setAgentCollapsed] = useState(false);
   const [conversationWidth, setConversationWidth] = useState(
     DEFAULT_CONVERSATION_WIDTH,
   );
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const maxWidth = Math.max(MIN_CONVERSATION_WIDTH, Math.min(MAX_CONVERSATION_WIDTH, windowWidth - 648));
+  const visibleWidth = Math.min(conversationWidth, maxWidth);
+  useEffect(() => {
+    const resize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  useEffect(() => {
+    if (location.pathname === "/new" || taskId) setAgentCollapsed(false);
+  }, [location.key, taskId]);
   const dragStart = useRef<{ pointerX: number; width: number } | null>(null);
   const projectId =
     location.pathname.match(/^\/projects\/([^/]+)/)?.[1] ??
@@ -39,7 +53,7 @@ export function AppShell() {
       dragStart.current.width + event.clientX - dragStart.current.pointerX;
     setConversationWidth(
       Math.min(
-        MAX_CONVERSATION_WIDTH,
+        maxWidth,
         Math.max(MIN_CONVERSATION_WIDTH, nextWidth),
       ),
     );
@@ -47,33 +61,30 @@ export function AppShell() {
 
   return (
     <div className="flex h-full w-full bg-transparent text-zinc-100">
-      <Sidebar projectId={projectId} />
+      <Sidebar />
 
       <div className="h-full w-full overflow-hidden flex-1">
-        <div className="flex min-w-0 flex-1 overflow-hidden h-full">
-          {task && (
-            <AgentPanel
-              key={task.id}
+        <div className="flex min-w-0 flex-1 overflow-hidden h-full rounded-l-2xl">
+          <AgentPanel
               projectId={projectId}
-              width={conversationWidth}
+              width={visibleWidth}
               collapsed={agentCollapsed}
               onToggle={() => setAgentCollapsed((value) => !value)}
             />
-          )}
 
-          {task && !agentCollapsed && (
+          {!agentCollapsed && (
             <div
               role="separator"
               aria-label="Resize conversation"
               aria-orientation="vertical"
               aria-valuemin={MIN_CONVERSATION_WIDTH}
-              aria-valuemax={MAX_CONVERSATION_WIDTH}
-              aria-valuenow={conversationWidth}
+              aria-valuemax={maxWidth}
+              aria-valuenow={visibleWidth}
               tabIndex={0}
               onPointerDown={(event) => {
                 dragStart.current = {
                   pointerX: event.clientX,
-                  width: conversationWidth,
+                  width: visibleWidth,
                 };
                 event.currentTarget.setPointerCapture(event.pointerId);
               }}
@@ -94,8 +105,8 @@ export function AppShell() {
                 const change = event.key === "ArrowLeft" ? -16 : 16;
                 setConversationWidth((width) =>
                   Math.min(
-                    MAX_CONVERSATION_WIDTH,
-                    Math.max(MIN_CONVERSATION_WIDTH, width + change),
+                    maxWidth,
+                    Math.max(MIN_CONVERSATION_WIDTH, Math.min(width, maxWidth) + change),
                   ),
                 );
               }}

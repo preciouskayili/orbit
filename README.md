@@ -1,101 +1,100 @@
 # Orbit
 
-Orbit is a desktop-first foundation for persistent cloud-computer workspaces. Projects own durable machines, activity, files, and an attached agent surface. This repository intentionally stops before cloud provisioning, authentication, streaming, and real agent execution.
+Computers for agents. Work with your agent in a persistent conversation, give it a fleet of computers, watch their desktops, and take control whenever you need.
 
-## Repository structure
+This is a **local interactive frontend prototype**, not a cloud service. Agent responses, provisioning, desktop sessions, and execution are simulated. Projects, conversations, computers, files, schedules, and preferences persist in local storage.
 
-```text
-orbit/
-├── apps/
-│   ├── api/           Express + TypeScript mocked API
-│   └── desktop/       Electron main/preload + React/Vite renderer
-├── packages/
-│   ├── shared/        Shared Zod schemas, types, and IPC contracts
-│   └── ui/            Small reusable UI primitives
-├── package.json
-├── pnpm-workspace.yaml
-└── tsconfig.base.json
-```
+## Run
 
-## Requirements
-
-- Node.js 20 or newer
-- pnpm 11
-
-## Install and run
+Use Node 22.12+ (or a newer supported release) and pnpm 11.
 
 ```bash
 pnpm install
-pnpm dev
+pnpm dev:desktop
 ```
 
-`pnpm dev` builds the two internal packages, starts the API at `http://127.0.0.1:4000`, starts Vite at `http://127.0.0.1:5173`, and opens the Electron app.
-
-Other useful commands:
+No API server or credentials are required for the frontend. The renderer runs at http://127.0.0.1:5173 inside Electron.
 
 ```bash
-pnpm dev:desktop   # renderer + Electron; expects the API separately
-pnpm dev:api       # mocked Express API only
-pnpm build         # build every workspace package
-pnpm typecheck     # typecheck every workspace package
+pnpm --filter @orbit/desktop test  # store + component interaction tests
+pnpm typecheck                   # all packages
+pnpm build                       # production builds
+pnpm dev:api                     # independent legacy mock API
 ```
 
-Copy the example environment files only when overriding defaults:
+`pnpm dev` also starts the legacy Express API at port 4000. The current frontend doesn't call it.
 
-```bash
-cp apps/api/.env.example apps/api/.env
-cp apps/desktop/.env.example apps/desktop/.env
+## Try the flow
+
+1. Start a conversation. Choose a project and agent; no computer is required yet.
+2. Use **Attach** for an available computer, or **New computer** to configure an OS, resources, and up to ten computers. Creating from the agent panel automatically attaches the fleet.
+3. The computer opens beside the conversation. Switch between Desktop, Terminal, Files, and Browser. The desktop is an interactive local preview, not a stream.
+4. **Continue** starts the demo run. **Preview next step** advances a deterministic three-step example to review. It does not interpret or execute your prompt.
+5. **Take control** pauses the agent and unlocks the demo terminal and file editor. Start any stopped computers, hand control back, and continue when ready.
+6. Approve the example output or end the run. Computers and files remain available for another conversation.
+
+The demo shell supports `help`, `pwd`, `ls`, `cat <filename>`, `uname`, and `clear`. The browser preview validates an address without loading external pages.
+
+**⌘K / Ctrl+K** searches projects, computers, and conversations, and opens agent skills, scheduled work, and settings. Arrow keys select; Enter opens; Escape dismisses.
+
+The sidebar keeps main navigation, collapsible project folders, recent conversations, and the workspace/profile switcher. The agent panel persists across pages, can collapse, and resizes with a drag or arrow keys on its separator.
+
+## Code map
+
+```text
+apps/desktop/
+  electron/                     Native window, vibrancy, isolated preload
+  src/
+    components/
+      app-shell.tsx             Sidebar, agent panel, resizable workspace
+      sidebar.tsx               Navigation, projects, recents, workspace menu
+      agent-panel.tsx           Conversation, composer, attached computers
+      command-palette.tsx       Workspace search and keyboard navigation
+      create-machine-dialog.tsx OS/resources/fleet creation
+      computer-desktop.tsx      Interactive desktop preview; streaming seam
+      machine-viewport.tsx      Handoff, lifecycle, demo apps and files
+      schedule-composer.tsx     Optional recurring-work configuration
+      ui/                       Owned Base UI controls and Phosphor exports
+    pages/                      Route-level composition
+    hooks/use-orbit.ts           Reactive local state subscription
+    hooks/queries.ts             Workspace-scoped fleet query hooks
+    lib/orbit-store.ts           Validated state + product actions + persistence
+    lib/api.ts                  Local adapter for existing query hooks
+    lib/demo-seed.ts             Sample projects and computers
+    assets/os/                  Downloaded OS logos and attribution
+  tests/                        Lifecycle, persistence, menus, chat, GUI controls
+packages/shared/                Shared Zod contracts and Electron IPC types
+apps/api/                       Legacy in-memory Express scaffold
 ```
 
-## Current architecture
+### UI conventions
 
-The renderer uses React Router with hash-based desktop-safe routes and TanStack Query for projects, machines, activity, and agent messages. Query hooks call a small API client; page components do not own mocked server data.
+Use the small components in `src/components/ui`. They follow the existing shadcn Base UI direction, **not Radix**. Base UI handles focus and keyboard interactions; Orbit owns the visual styling. Menu labels must be inside `DropdownMenuGroup`.
 
-The Express service keeps mock records in memory. Creating a machine validates input with the shared Zod contract and adds the result to memory until the API restarts. Replacing this layer with a database and cloud machine provider should not require changing the page-level data model.
+Use Phosphor icons through `ui/icons.ts`, OS marks through `OsLogo`, and custom `SelectControl` / `Checkbox` components instead of native selects and checkboxes. Favor surface colors over extra borders. SF Pro comes from the macOS system font; variable Inter is bundled as the fallback.
 
-Electron uses three layers:
+The sidebar's scrollbar stays at the outer edge. Its content padding compensates for the reserved scrollbar width; avoid adding right padding to the scroll container.
 
-- `electron/main.ts` owns the application window and IPC handlers.
-- `electron/preload.ts` exposes a narrow typed API through `contextBridge`.
-- `src/` is the sandboxed renderer with context isolation enabled and Node integration disabled.
+### State and backend handoff
 
-Native clipboard, filesystem, notification, and window-control features are represented in the IPC contract but intentionally return unavailable placeholders.
+All local product mutations go through `orbitActions`. Updates clone and validate state before publishing it, so rejected actions cannot partially update the prototype. Workspace checks apply to reads and mutations; assigned computers cannot be shared between unfinished runs. Human takeover and stopping a computer pause its run.
 
-## UI map
+The storage key is `orbit.prototype.v1`. Older records are accepted with defaults for newly added fields. The persisted `tasks` collection now represents conversations with an optional demo-run lifecycle; the key is retained to preserve existing data. `activeConversations` remembers the selected conversation for each workspace. Storage failures are surfaced in Settings.
 
-The desktop surface is intentionally split into a few small components so the
-product can grow without turning the main screen into one large file:
+For backend work:
 
-- `apps/desktop/src/components/sidebar.tsx` — global navigation, spaces, and setup state
-- `apps/desktop/src/components/app-shell.tsx` — rounded workspace frame and resizable split
-- `apps/desktop/src/components/agent-panel.tsx` — the task thread and composer
-- `apps/desktop/src/components/workspace-header.tsx` — shared search and computer tabs
-- `apps/desktop/src/pages/machine-workspace-page.tsx` — loads one computer into the workspace
-- `apps/desktop/src/components/machine-viewport.tsx` — the active streamed-computer surface
-- `apps/api/src/data.ts` — the current projects, computers, activity, and messages
+- Replace `lib/api.ts` with authenticated requests for fleet reads.
+- Replace local `orbitActions` mutations with service calls and reconcile their responses into state. Components that use `useOrbit` need that subscription fed by server state too; changing the adapter alone is not enough.
+- Replace the simulated message/preview actions with agent events and streamed responses.
+- Mount a remote-session client at `computer-desktop.tsx` / `machine-viewport.tsx`. Keep video transport and input forwarding outside the React presentation code.
+- Implement server-enforced workspace authorization, computer ownership, handoff locks, durable file storage, and scheduling. Client checks here are prototype behavior, not a security boundary.
 
-Interactive primitives live in `apps/desktop/src/components/ui`. They were
-initialized from shadcn's Base UI Nova preset, then reduced to the small API
-Orbit actually uses. Base UI owns accessibility, focus, and keyboard behavior;
-Orbit components own appearance and product behavior. Add future shadcn
-components from `apps/desktop` so the Base UI selection in `components.json`
-is respected.
+No authentication, billing, OS licensing, real provisioning, remote input, external browser automation, or background scheduling is implemented. macOS availability and licensing need a provider decision before being offered as a real cloud option.
 
-The interface uses the system San Francisco font on macOS and bundled variable
-Inter everywhere else.
+## Verification
 
-Start with `machine-workspace-page.tsx` when connecting real computer sessions.
-Keep streaming/protocol code outside the React view, then pass session state into
-`MachineViewport`. Replace the arrays in `data.ts` behind the existing API routes
-when durable storage and a provisioning provider are ready.
+Vitest + Testing Library cover workspace menu grouping, keyboard search, custom selection, conversation creation, inline provisioning, desktop/file controls, handoff, run review, persistence, invalid input, and workspace isolation.
 
-## Mocked scope
+Manual visual checks still needed on macOS: native blur, live resizing at minimum window size, long conversation scrolling, and desktop/modal layout. DOM interaction tests do not replace a real-window visual pass.
 
-- Projects, machines, activity, and agent messages
-- Remote desktop viewport and connection metrics
-- Machine lifecycle buttons
-- Agent execution and composer responses
-- Machine creation/provisioning (the form does update in-memory API data)
-- Settings controls
-
-No AWS, OpenAI, Supabase, authentication, billing, WebRTC, remote desktop stream, or real machine provisioning is included.
+OS asset sources and trademark notes are in [SOURCES.md](apps/desktop/src/assets/os/SOURCES.md).

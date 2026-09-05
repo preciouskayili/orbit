@@ -36,7 +36,11 @@ select {
   font: inherit;
 }
 
-button {
+button,
+a,
+input,
+textarea,
+[role="combobox"] {
   -webkit-app-region: no-drag;
 }
 

@@ -15,6 +15,7 @@ const taskSchema = z.object({
 const scheduleSchema = z.object({ id: z.string(), projectId: z.string(), agentId: z.string(), machineIds: z.array(z.string()), prompt: z.string(), cadence: z.enum(["Daily", "Weekdays", "Weekly"]), time: z.string(), enabled: z.boolean() });
 const stateSchema = z.object({
   version: z.literal(1),
+  activeConversations: z.record(z.string(), z.string()).default({}),
   workspaceId: z.string(), workspaces: z.array(workspaceSchema),
   projects: z.array(ProjectSchema.extend({ workspaceId: z.string() })),
   machines: z.array(MachineSchema), activity: z.array(ActivityEventSchema), messages: z.array(AgentMessageSchema),
@@ -24,6 +25,8 @@ const stateSchema = z.object({
   settings: z.object({ name: z.string(), notifications: z.boolean() }),
 });
 export type OrbitState = z.infer<typeof stateSchema>;
+// The persisted "tasks" key is retained for existing prototype data. Each record
+// is now a conversation with an optional simulated execution lifecycle.
 export type Task = z.infer<typeof taskSchema>;
 export type OrbitAgent = z.infer<typeof agentSchema>;
 export type Schedule = z.infer<typeof scheduleSchema>;
@@ -33,7 +36,7 @@ const id = () => crypto.randomUUID();
 
 function initialState(): OrbitState {
   return {
-    version: 1, workspaceId: "personal",
+    version: 1, activeConversations: {}, workspaceId: "personal",
     workspaces: [{ id: "personal", name: "Personal workspace" }, { id: "team", name: "Orbit team" }],
     projects: seed.projects.map(p => ({ ...p, workspaceId: "personal" })),
     machines: seed.machines, activity: seed.activity, messages: seed.messages,
@@ -47,7 +50,12 @@ function restore(): OrbitState {
   try {
     const raw = typeof localStorage !== "undefined" ? localStorage.getItem(KEY) : null;
     if (!raw) return initialState();
-    const result = stateSchema.safeParse(JSON.parse(raw));
+    let decoded: unknown;
+    try { decoded = JSON.parse(raw); } catch {
+      persistenceError = "Saved prototype data is damaged. This session is using sample data.";
+      return initialState();
+    }
+    const result = stateSchema.safeParse(decoded);
     if (result.success) return result.data;
     persistenceError = "Saved prototype data could not be loaded. This session is using sample data.";
   } catch { persistenceError = "Local storage is unavailable. Changes will only last for this session."; }
@@ -192,15 +200,54 @@ export const orbitActions = {
       else d.agents.push({ ...input, id: id(), workspaceId: d.workspaceId });
     });
   },
+  // Conversations can begin before a computer exists. Allocation is a separate action.
+  openConversation(conversationId: string) {
+    update(d => { taskInWorkspace(d, conversationId); d.activeConversations[d.workspaceId] = conversationId; });
+  },
+  newConversation() {
+    update(d => { delete d.activeConversations[d.workspaceId]; });
+  },
+  createConversation(projectId: string, agentId: string, prompt: string) {
+    const conversationId = id();
+    update(d => {
+      projectInWorkspace(d, projectId);
+      if (!d.agents.some(a => a.id === agentId && a.workspaceId === d.workspaceId)) throw new Error("Choose an agent in this workspace.");
+      if (!prompt.trim()) throw new Error("Tell your agent what you want to work on.");
+      d.tasks.unshift({
+        id: conversationId, projectId, agentId, title: prompt.trim().slice(0, 65), prompt: prompt.trim(),
+        machineIds: [], status: "paused", step: 0, createdAt: now(), events: [], artifacts: [],
+        messages: [
+          { role: "user", content: prompt.trim() },
+          { role: "assistant", content: "Let’s work on this together. Attach an existing computer or create one below, and you can inspect its desktop alongside our conversation. This is a local preview: responses and execution are simulated until the agent backend is connected." },
+        ],
+      });
+      d.activeConversations[d.workspaceId] = conversationId;
+    });
+    return conversationId;
+  },
+  attachComputers(conversationId: string, machineIds: string[]) {
+    update(d => {
+      const conversation = taskInWorkspace(d, conversationId);
+      if (["completed", "cancelled"].includes(conversation.status)) throw new Error("Start a new conversation to assign more computers.");
+      validateAssignment(d, conversation.projectId, conversation.agentId, machineIds);
+      const added = [...new Set(machineIds)].filter(mid => !conversation.machineIds.includes(mid));
+      if (d.tasks.some(t => t.id !== conversation.id && ["running", "paused", "review"].includes(t.status) && t.machineIds.some(mid => added.includes(mid)))) throw new Error("That computer is busy in another conversation.");
+      conversation.machineIds.push(...added);
+      if (added.length) {
+        conversation.messages.push({ role: "assistant", content: "Added " + added.map(mid => d.machines.find(m => m.id === mid)!.name).join(", ") + ". Open a desktop to follow along. Start stopped computers and hand control back before continuing." });
+        conversation.events.push({ title: "Computers attached", timestamp: now() });
+      }
+    });
+  },
   createTask(input: { projectId: string; agentId: string; machineIds: string[]; prompt: string }) {
-    let taskId = ""; update(d => { taskId = startTask(d, input); }); return taskId;
+    let taskId = ""; update(d => { taskId = startTask(d, input); d.activeConversations[d.workspaceId] = taskId; }); return taskId;
   },
   message(taskId: string, content: string) {
     update(d => {
       const task = taskInWorkspace(d, taskId);
       if (!content.trim()) return;
       task.messages.push({ role: "user", content: content.trim() });
-      task.messages.push({ role: "assistant", content: "Added to this task's instructions. The next preview step will preserve this context." });
+      task.messages.push({ role: "assistant", content: "Your instructions are saved with our conversation. This prototype records context; a connected agent will respond and act on it." });
     });
   },
   taskAction(taskId: string, action: "pause" | "resume" | "advance" | "approve" | "cancel") {
@@ -210,6 +257,7 @@ export const orbitActions = {
       if (action === "cancel") { task.status = "cancelled"; task.events.push({ title: "Task cancelled · computers retained", timestamp: now() }); return; }
       if (action === "pause" && task.status === "running") task.status = "paused";
       else if (action === "resume" && task.status === "paused") {
+        if (!task.machineIds.length) throw new Error("Attach a computer first.");
         if (task.machineIds.some(mid => d.control[mid] === "human" || d.machines.find(m => m.id === mid)?.status !== "running")) throw new Error("Start all assigned computers and return control to the agent first.");
         task.status = "running";
       } else if (action === "advance" && task.status === "running") {
@@ -221,21 +269,21 @@ export const orbitActions = {
         if (task.step >= 3) {
           task.status = "review";
           task.artifacts = [{ name: "run-summary.md", content: "# Demo run summary\n\nTask: " + task.prompt + "\n\nComputers: " + task.machineIds.map(mid => d.machines.find(m => m.id === mid)?.name).join(", ") + "\n\nThis artifact demonstrates the review flow. Real execution will be connected by the backend.\n" }];
-          task.machineIds.forEach(mid => { d.files[mid] ??= {}; d.files[mid]["run-summary.md"] = task.artifacts[0].content; });
+          task.machineIds.forEach(mid => { d.files[mid] ??= {}; d.files[mid]["run-summary.md"] = task.artifacts[0]!.content; });
         }
       } else if (action === "approve" && task.status === "review") { task.status = "completed"; task.events.push({ title: "Results approved", timestamp: now() }); }
       else throw new Error("That action is not available for this task.");
     });
   },
   saveSchedule(input: Omit<Schedule, "id" | "enabled">) {
-    update(d => { validateAssignment(d, input.projectId, input.agentId, input.machineIds); if (!input.prompt.trim() || !/^\d{2}:\d{2}$/.test(input.time)) throw new Error("Add a task and valid time."); d.schedules.push({ ...input, id: id(), enabled: true }); });
+    update(d => { validateAssignment(d, input.projectId, input.agentId, input.machineIds); if (!input.prompt.trim() || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.time)) throw new Error("Add a task and valid time."); d.schedules.push({ ...input, id: id(), enabled: true }); });
   },
   toggleSchedule(scheduleId: string) {
     update(d => { const schedule = d.schedules.find(s => s.id === scheduleId); if (!schedule) return; projectInWorkspace(d, schedule.projectId); schedule.enabled = !schedule.enabled; });
   },
   runSchedule(scheduleId: string) {
     let taskId = "";
-    update(d => { const schedule = d.schedules.find(s => s.id === scheduleId); if (!schedule) throw new Error("Schedule not found."); taskId = startTask(d, schedule); });
+    update(d => { const schedule = d.schedules.find(s => s.id === scheduleId); if (!schedule) throw new Error("Schedule not found."); taskId = startTask(d, schedule); d.activeConversations[d.workspaceId] = taskId; });
     return taskId;
   },
   settings(input: OrbitState["settings"]) { update(d => { d.settings = input; }); },

@@ -1,4 +1,5 @@
 import { useState, type ReactNode, type FormEvent } from "react";
+import { Plus } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -114,16 +115,16 @@ export function CreateContainer({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        render={<Button variant={compact ? "ghost" : "secondary"} size="sm" />}
+        render={<Button variant={compact ? "ghost" : "secondary"} size={compact ? "icon-sm" : "sm"} aria-label={compact ? "New " + kind : undefined} />}
       >
-        New {kind}
+        {compact ? <Plus className="size-3.5" /> : <>New {kind}</>}
       </DialogTrigger>
       <DialogContent className="p-6">
         <DialogTitle>Create a {kind}</DialogTitle>
         <DialogDescription className="mt-2">
           {kind === "workspace"
             ? "Give a team or a personal space its own projects and agents."
-            : "Keep a fleet, tasks, and outputs together."}
+            : "Keep computers, conversations, and files together."}
         </DialogDescription>
         <form onSubmit={submit} className="mt-6 space-y-4">
           <Field label="Name">
