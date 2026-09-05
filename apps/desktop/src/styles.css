@@ -5,7 +5,8 @@
 
 :root {
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     "Inter Variable", Inter, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   background: transparent;
   color: #ededed;
@@ -85,12 +86,19 @@ textarea,
   .flow-input {
     @apply block w-full rounded-lg bg-white/[0.045] px-3 py-2.5 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-white/20;
   }
-  .flow-input option { background: #242424; }
+  .flow-input option {
+    background: #242424;
+  }
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 0.42; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .agent-pulse {
@@ -126,4 +134,71 @@ textarea,
 .remote-table th,
 .remote-table td {
   border: 1px solid #d2d5d8;
+}
+
+.agent-markdown {
+  overflow-wrap: anywhere;
+}
+.agent-markdown > * + * {
+  margin-top: 12px;
+}
+.agent-markdown h1,
+.agent-markdown h2,
+.agent-markdown h3 {
+  color: #ddd;
+  font-size: 1em;
+  font-weight: 600;
+  margin-top: 18px;
+}
+.agent-markdown ul {
+  list-style: disc;
+  padding-left: 20px;
+}
+.agent-markdown ol {
+  list-style: decimal;
+  padding-left: 20px;
+}
+.agent-markdown li + li {
+  margin-top: 4px;
+}
+.agent-markdown strong {
+  color: #ddd;
+  font-weight: 600;
+}
+.agent-markdown code {
+  background: #ffffff09;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+.agent-markdown pre {
+  overflow-x: auto;
+  background: #ffffff06;
+  border-radius: 10px;
+  padding: 12px;
+}
+.agent-markdown pre code {
+  background: none;
+  padding: 0;
+}
+.agent-markdown a {
+  color: #a5c5de;
+  text-decoration: underline;
+}
+.agent-markdown blockquote {
+  padding: 10px 14px;
+  background: #ffffff05;
+  border-radius: 8px;
+}
+.agent-markdown table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  font-size: 12px;
+}
+.agent-markdown th,
+.agent-markdown td {
+  padding: 6px 10px;
+  text-align: left;
+  background: #ffffff04;
 }

@@ -1,7 +1,13 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
 let store: typeof import("../src/lib/orbit-store");
-const input = { name: "Test computer", os: "ubuntu" as const, cpu: 4, ramGb: 8, storageGb: 80 };
+const input = {
+  name: "Test computer",
+  os: "ubuntu" as const,
+  cpu: 4,
+  ramGb: 8,
+  storageGb: 80,
+};
 beforeEach(async () => {
   localStorage.clear();
   vi.resetModules();
@@ -9,21 +15,32 @@ beforeEach(async () => {
 });
 function setup() {
   const projectId = store.orbitActions.createProject("Test project", "");
-  const conversationId = store.orbitActions.createConversation(projectId, "fleet-agent", "Build a test app");
+  const conversationId = store.orbitActions.createConversation(
+    projectId,
+    "fleet-agent",
+    "Build a test app",
+  );
   return { projectId, conversationId };
 }
 test("a conversation starts before a computer exists, and accepts a fleet on the fly", () => {
   const { projectId, conversationId } = setup();
   const actions = store.orbitActions;
   expect(store.getOrbitState().tasks[0].machineIds).toEqual([]);
-  expect(() => actions.taskAction(conversationId, "resume")).toThrow("Attach a computer");
+  expect(() => actions.taskAction(conversationId, "resume")).toThrow(
+    "Attach a computer",
+  );
   const ids = actions.createFleet(projectId, input, 3);
   actions.attachComputers(conversationId, ids);
   actions.attachComputers(conversationId, ids);
   expect(store.getOrbitState().tasks[0].machineIds).toEqual(ids);
   actions.taskAction(conversationId, "resume");
   expect(store.getOrbitState().tasks[0].status).toBe("running");
-  expect(store.getOrbitState().projects.find(p => p.id === projectId)?.machineCount).toBe(3);
+  expect(
+    store
+      .getOrbitState()
+      .machines.filter((m) => ids.includes(m.id))
+      .every((m) => m.workspaceId === "personal"),
+  ).toBe(true);
 });
 test("human takeover pauses the agent; files survive stopping and resuming", () => {
   const { projectId, conversationId } = setup();
@@ -33,7 +50,9 @@ test("human takeover pauses the agent; files survive stopping and resuming", () 
   actions.taskAction(conversationId, "resume");
   actions.setControl(mid, "human");
   expect(store.getOrbitState().tasks[0].status).toBe("paused");
-  expect(() => actions.taskAction(conversationId, "resume")).toThrow("return control");
+  expect(() => actions.taskAction(conversationId, "resume")).toThrow(
+    "return control",
+  );
   actions.saveFile(mid, "notes.md", "Keep this.");
   actions.machineStatus(mid, "stopped");
   expect(() => actions.saveFile(mid, "notes.md", "Lost")).toThrow();
@@ -51,8 +70,14 @@ test("preview runs reach review, deliver files, and release computers when appro
   actions.taskAction(conversationId, "resume");
   for (let i = 0; i < 3; i++) actions.taskAction(conversationId, "advance");
   expect(store.getOrbitState().tasks[0].status).toBe("review");
-  expect(store.getOrbitState().files[ids[0]]["run-summary.md"]).toContain("Build a test app");
-  const next = actions.createConversation(projectId, "fleet-agent", "Next piece of work");
+  expect(store.getOrbitState().files[ids[0]]["run-summary.md"]).toContain(
+    "Build a test app",
+  );
+  const next = actions.createConversation(
+    projectId,
+    "fleet-agent",
+    "Next piece of work",
+  );
   expect(() => actions.attachComputers(next, ids)).toThrow("busy");
   actions.taskAction(conversationId, "approve");
   actions.attachComputers(next, ids);
@@ -77,9 +102,17 @@ test("conversation context, active selection and files restore after reload", as
   store.orbitActions.message(conversationId, "Use TypeScript");
   vi.resetModules();
   const restored = await import("../src/lib/orbit-store");
-  expect(restored.getOrbitState().activeConversations.personal).toBe(conversationId);
-  expect(restored.getOrbitState().tasks[0].messages.some(m => m.content === "Use TypeScript")).toBe(true);
-  expect(restored.getOrbitState().files[ids[0]]["README.md"]).toContain("Test computer");
+  expect(restored.getOrbitState().activeConversations.personal).toBe(
+    conversationId,
+  );
+  expect(
+    restored
+      .getOrbitState()
+      .tasks[0].messages.some((m) => m.content === "Use TypeScript"),
+  ).toBe(true);
+  expect(restored.getOrbitState().files[ids[0]]["README.md"]).toContain(
+    "Test computer",
+  );
 });
 test("invalid saved data falls back safely and exposes an explanation", async () => {
   localStorage.setItem("orbit.prototype.v1", "{broken");
@@ -87,4 +120,74 @@ test("invalid saved data falls back safely and exposes an explanation", async ()
   const restored = await import("../src/lib/orbit-store");
   expect(restored.getOrbitState().projects.length).toBeGreaterThan(0);
   expect(restored.getPersistenceError()).toBeTruthy();
+});
+
+test("a shared computer can move between projects without being recreated", async () => {
+  const actions = store.orbitActions;
+  const { projectComputers, workspaceComputers } =
+    await import("../src/lib/orbit-selectors");
+  const p1 = actions.createProject("Project one", "");
+  const p2 = actions.createProject("Project two", "");
+  const [mid] = actions.createComputers(input);
+  const c1 = actions.createConversation(p1, "fleet-agent", "First");
+  actions.attachComputers(c1, [mid]);
+  expect(projectComputers(store.getOrbitState(), p1).map((m) => m.id)).toEqual([
+    mid,
+  ]);
+  const c2 = actions.createConversation(p2, "fleet-agent", "Second");
+  expect(() => actions.attachComputers(c2, [mid])).toThrow("busy");
+  actions.taskAction(c1, "cancel");
+  actions.attachComputers(c2, [mid]);
+  expect(projectComputers(store.getOrbitState(), p1)).toEqual([]);
+  expect(projectComputers(store.getOrbitState(), p2).map((m) => m.id)).toEqual([
+    mid,
+  ]);
+  expect(
+    workspaceComputers(store.getOrbitState()).some((m) => m.id === mid),
+  ).toBe(true);
+});
+test("mentioning a computer requests permission; denial never assigns it", () => {
+  const { projectId } = setup();
+  const actions = store.orbitActions;
+  const [mid] = actions.createComputers(input);
+  const cid = actions.createConversation(
+    projectId,
+    "fleet-agent",
+    'Work on @"Test computer"',
+    [mid],
+  );
+  const request = store.getOrbitState().tasks.find((t) => t.id === cid)!
+    .requests[0];
+  expect(store.getOrbitState().tasks[0].machineIds).toEqual([]);
+  actions.resolveComputerRequest(cid, request.id, false);
+  expect(store.getOrbitState().tasks[0].machineIds).toEqual([]);
+  actions.message(cid, "Please use it now", [mid]);
+  const pending = store
+    .getOrbitState()
+    .tasks[0].requests.find((r) => r.status === "pending")!;
+  actions.resolveComputerRequest(cid, pending.id, true);
+  expect(store.getOrbitState().tasks[0].machineIds).toEqual([mid]);
+});
+test("autonomous allocation needs opt-in, respects human control, and can be revoked", () => {
+  const { conversationId } = setup();
+  const actions = store.orbitActions;
+  const [mid, other] = actions.createComputers(input, 2);
+  actions.setComputerAccess(conversationId, "workspace");
+  actions.message(conversationId, "Use this", [mid]);
+  expect(store.getOrbitState().tasks[0].machineIds).toContain(mid);
+  actions.setControl(other, "human");
+  actions.message(conversationId, "And this", [other]);
+  expect(store.getOrbitState().tasks[0].machineIds).not.toContain(other);
+  expect(store.getOrbitState().tasks[0].requests[0].status).toBe("pending");
+  actions.setComputerAccess(conversationId, "ask");
+  const [third] = actions.createComputers({ ...input, name: "Third" });
+  actions.message(conversationId, "Use another", [third]);
+  expect(store.getOrbitState().tasks[0].machineIds).not.toContain(third);
+});
+test("agent can select an available computer under an explicit conversation permission", () => {
+  const { conversationId } = setup();
+  store.orbitActions.setComputerAccess(conversationId, "workspace");
+  store.orbitActions.requestAvailableComputer(conversationId);
+  expect(store.getOrbitState().tasks[0].machineIds.length).toBe(1);
+  expect(store.getOrbitState().tasks[0].requests).toEqual([]);
 });

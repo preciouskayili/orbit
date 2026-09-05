@@ -1,18 +1,14 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import type { Machine } from "@orbit/shared";
-import {
-  ArrowClockwise,
-  MagnifyingGlass,
-  Monitor,
-  X,
-} from "@/components/ui/icons";
+import { MagnifyingGlass, Monitor, X } from "@/components/ui/icons";
 import { SelectControl } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ComputerCard } from "@/components/computer-card";
 import { CreateMachineDialog } from "@/components/create-machine-dialog";
-import { ErrorState, LoadingState } from "@/components/query-state";
-import { useActivity, useMachines, useProject } from "@/hooks/queries";
+import { useOrbit } from "@/hooks/use-orbit";
+import { orbitActions } from "@/lib/orbit-store";
+import { workspaceComputers, projectComputers } from "@/lib/orbit-selectors";
 
 const filters = ["All", "Running", "Stopped", "Needs attention"] as const;
 type Filter = (typeof filters)[number];
@@ -37,20 +33,19 @@ export function ProjectOverviewPage() {
   return <ComputerFleet key={projectId} projectId={projectId} />;
 }
 
-export function ComputerFleet({ projectId }: { projectId: string }) {
-  const projectQuery = useProject(projectId);
-  const machinesQuery = useMachines(projectId);
-  const activityQuery = useActivity(projectId);
+export function ComputerFleet({ projectId }: { projectId?: string }) {
+  const state = useOrbit();
+  const navigate = useNavigate();
+  const project = state.projects.find(
+    (p) => p.id === projectId && p.workspaceId === state.workspaceId,
+  );
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [sort, setSort] = useState<Sort>("status");
 
-  if (projectQuery.isLoading || machinesQuery.isLoading)
-    return <LoadingState label="Loading computers" />;
-  const error = projectQuery.error || machinesQuery.error;
-  if (error) return <ErrorState error={error} />;
-
-  const machines = machinesQuery.data ?? [];
+  const machines = projectId
+    ? projectComputers(state, projectId)
+    : workspaceComputers(state);
   const running = machines.filter((machine) => machine.status === "running");
   const cpu = machines.reduce((total, machine) => total + machine.cpu, 0);
   const memory = machines.reduce((total, machine) => total + machine.ramGb, 0);
@@ -58,9 +53,10 @@ export function ComputerFleet({ projectId }: { projectId: string }) {
     (total, machine) => total + machine.storageGb,
     0,
   );
-  const activity = [...(activityQuery.data ?? [])].sort((a, b) =>
-    b.timestamp.localeCompare(a.timestamp),
-  );
+  const activity = state.activity
+    .filter((a) => machines.some((m) => m.id === a.machineId))
+    .slice()
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const query = search.trim().toLowerCase();
   const visible = machines
     .filter((machine) => matchesFilter(machine, filter))
@@ -78,32 +74,17 @@ export function ComputerFleet({ projectId }: { projectId: string }) {
         a.name.localeCompare(b.name)
       );
     });
-  const refreshing = machinesQuery.isFetching || activityQuery.isFetching;
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-[#171818]">
       <header className="window-drag flex h-[54px] shrink-0 items-center gap-2 bg-[#1a1a1a] px-5">
         <Monitor className="size-4 shrink-0 text-zinc-500" />
         <span className="truncate text-sm text-zinc-400">
-          {projectQuery.data?.name}
+          {project?.name ??
+            state.workspaces.find((w) => w.id === state.workspaceId)?.name}
         </span>
         <span className="text-zinc-600">/</span>
         <span className="text-sm text-zinc-200">Computers</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="ml-auto"
-          aria-label="Refresh computers"
-          disabled={refreshing}
-          onClick={() => {
-            void machinesQuery.refetch();
-            void activityQuery.refetch();
-          }}
-        >
-          <ArrowClockwise
-            className={refreshing ? "size-4 animate-spin" : "size-4"}
-          />
-        </Button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -111,13 +92,27 @@ export function ComputerFleet({ projectId }: { projectId: string }) {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h1 className="text-xl font-medium tracking-tight text-zinc-100">
-                Your computers
+                {project ? "Computers in use" : "Your computers"}
               </h1>
               <p className="mt-1.5 text-sm leading-5 text-zinc-500">
-                A place for every agent to work.
+                {project
+                  ? "Computers currently attached to this project’s conversations."
+                  : "One shared fleet. Available wherever your work takes you."}
               </p>
             </div>
-            <CreateMachineDialog projectId={projectId} />
+            {project ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  orbitActions.newConversation();
+                  navigate("/new?project=" + project.id);
+                }}
+              >
+                Work with agent
+              </Button>
+            ) : (
+              <CreateMachineDialog />
+            )}
           </div>
 
           <div className="my-6 rounded-2xl bg-[#202121] p-4">
@@ -149,7 +144,10 @@ export function ComputerFleet({ projectId }: { projectId: string }) {
               )}
             </div>
             <p className="mt-3 text-xs leading-5 text-zinc-500">
-              Allocated across this project{" "}
+              Allocated{" "}
+              {project
+                ? "to this project’s active work"
+                : "across your workspace"}{" "}
               <span className="mx-1 text-zinc-600">·</span>
               <span className="text-zinc-400">
                 {cpu} vCPU · {memory} GB memory · {storage} GB disk
@@ -178,7 +176,16 @@ export function ComputerFleet({ projectId }: { projectId: string }) {
                   </button>
                 )}
               </div>
-              <SelectControl<Sort> label="Sort computers" value={sort} onValueChange={setSort} options={[{ value: "status", label: "Status first" }, { value: "name", label: "Name A–Z" }, { value: "recent", label: "Last seen" }]} />
+              <SelectControl<Sort>
+                label="Sort computers"
+                value={sort}
+                onValueChange={setSort}
+                options={[
+                  { value: "status", label: "Status first" },
+                  { value: "name", label: "Name A–Z" },
+                  { value: "recent", label: "Last seen" },
+                ]}
+              />
             </div>
             <div
               className="flex flex-wrap items-center gap-1"
@@ -217,13 +224,7 @@ export function ComputerFleet({ projectId }: { projectId: string }) {
                   activity={activity.find(
                     (event) => event.machineId === machine.id,
                   )}
-                  activityState={
-                    activityQuery.isError
-                      ? "error"
-                      : activityQuery.isLoading
-                        ? "loading"
-                        : "ready"
-                  }
+                  activityState="ready"
                 />
               ))}
             </div>
@@ -233,12 +234,16 @@ export function ComputerFleet({ projectId }: { projectId: string }) {
               <h2 className="mt-4 text-sm font-medium text-zinc-200">
                 {machines.length
                   ? "No computers match"
-                  : "Your fleet starts here"}
+                  : project
+                    ? "No computers in use yet"
+                    : "Your fleet starts here"}
               </h2>
               <p className="mt-2 text-sm text-zinc-500">
                 {machines.length
                   ? "Try another name, operating system, or status."
-                  : "Create a computer to give your agents a workspace."}
+                  : project
+                    ? "Mention a computer in your conversation, or attach one from the shared fleet."
+                    : "Create a computer to give your agents a workspace."}
               </p>
               {machines.length > 0 && (
                 <Button

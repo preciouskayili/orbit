@@ -23,6 +23,8 @@ export type Project = z.infer<typeof ProjectSchema>;
 
 export const MachineSchema = z.object({
   id: z.string(),
+  // Computers belong to workspaces. projectId is a legacy creation hint only.
+  workspaceId: z.string().optional(),
   projectId: z.string(),
   name: z.string(),
   os: MachineOSSchema,
@@ -76,10 +78,7 @@ export const IPC_CHANNELS = {
 } as const;
 
 export type NativeFeature =
-  | "clipboard"
-  | "filesystem"
-  | "notifications"
-  | "window-controls";
+  "clipboard" | "filesystem" | "notifications" | "window-controls";
 
 export interface OrbitDesktopAPI {
   getRuntimeInfo: () => Promise<{ platform: NodeJS.Platform; version: string }>;

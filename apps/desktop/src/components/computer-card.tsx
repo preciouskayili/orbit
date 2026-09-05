@@ -1,11 +1,6 @@
 import type { ActivityEvent, Machine } from "@orbit/shared";
 import { Link } from "react-router-dom";
-import {
-  ArrowUpRight,
-  Cpu,
-  HardDrive,
-  Memory,
-} from "@/components/ui/icons";
+import { ArrowUpRight, Cpu, HardDrive, Memory } from "@/components/ui/icons";
 import { StatusBadge } from "@/components/status-badge";
 import { OsLogo } from "@/components/os-logo";
 
@@ -23,7 +18,7 @@ export function ComputerCard({
   const lastSeen = new Date(machine.lastSeenAt);
   return (
     <Link
-      to={`/projects/${machine.projectId}/machines/${machine.id}`}
+      to={`/computers/${machine.id}`}
       aria-label={`Open ${machine.name}`}
       className="group flex min-w-0 flex-col rounded-2xl bg-[#202121] p-4 transition-colors hover:bg-[#252626] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400"
     >

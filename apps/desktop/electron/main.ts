@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import { IPC_CHANNELS, type NativeFeature } from "@orbit/shared";
 
@@ -43,6 +43,19 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  // Agent Markdown links belong in the user's browser, never a privileged
+  // Electron child window. Only ordinary web URLs may leave the application.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      if (["https:", "http:"].includes(new URL(url).protocol)) {
+        void shell.openExternal(url).catch(() => {});
+      }
+    } catch {
+      /* Ignore malformed external links. */
+    }
+    return { action: "deny" };
   });
 
   window.once("ready-to-show", () => window.show());

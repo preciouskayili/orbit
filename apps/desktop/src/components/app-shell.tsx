@@ -25,13 +25,18 @@ export function AppShell() {
         (p) => p.id === t.projectId && p.workspaceId === state.workspaceId,
       ),
   );
-  useEffect(() => { if (taskId && task) orbitActions.openConversation(taskId); }, [taskId, state.workspaceId]);
+  useEffect(() => {
+    if (taskId && task) orbitActions.openConversation(taskId);
+  }, [taskId, state.workspaceId]);
   const [agentCollapsed, setAgentCollapsed] = useState(false);
   const [conversationWidth, setConversationWidth] = useState(
     DEFAULT_CONVERSATION_WIDTH,
   );
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const maxWidth = Math.max(MIN_CONVERSATION_WIDTH, Math.min(MAX_CONVERSATION_WIDTH, windowWidth - 648));
+  const maxWidth = Math.max(
+    MIN_CONVERSATION_WIDTH,
+    Math.min(MAX_CONVERSATION_WIDTH, windowWidth - 648),
+  );
   const visibleWidth = Math.min(conversationWidth, maxWidth);
   useEffect(() => {
     const resize = () => setWindowWidth(window.innerWidth);
@@ -44,6 +49,7 @@ export function AppShell() {
   const dragStart = useRef<{ pointerX: number; width: number } | null>(null);
   const projectId =
     location.pathname.match(/^\/projects\/([^/]+)/)?.[1] ??
+    new URLSearchParams(location.search).get("project") ??
     task?.projectId ??
     "";
 
@@ -52,10 +58,7 @@ export function AppShell() {
     const nextWidth =
       dragStart.current.width + event.clientX - dragStart.current.pointerX;
     setConversationWidth(
-      Math.min(
-        maxWidth,
-        Math.max(MIN_CONVERSATION_WIDTH, nextWidth),
-      ),
+      Math.min(maxWidth, Math.max(MIN_CONVERSATION_WIDTH, nextWidth)),
     );
   };
 
@@ -64,13 +67,13 @@ export function AppShell() {
       <Sidebar />
 
       <div className="h-full w-full overflow-hidden flex-1">
-        <div className="flex min-w-0 flex-1 overflow-hidden h-full rounded-l-2xl">
+        <div className="flex min-w-0 flex-1 overflow-hidden h-full">
           <AgentPanel
-              projectId={projectId}
-              width={visibleWidth}
-              collapsed={agentCollapsed}
-              onToggle={() => setAgentCollapsed((value) => !value)}
-            />
+            projectId={projectId}
+            width={visibleWidth}
+            collapsed={agentCollapsed}
+            onToggle={() => setAgentCollapsed((value) => !value)}
+          />
 
           {!agentCollapsed && (
             <div
@@ -106,7 +109,10 @@ export function AppShell() {
                 setConversationWidth((width) =>
                   Math.min(
                     maxWidth,
-                    Math.max(MIN_CONVERSATION_WIDTH, Math.min(width, maxWidth) + change),
+                    Math.max(
+                      MIN_CONVERSATION_WIDTH,
+                      Math.min(width, maxWidth) + change,
+                    ),
                   ),
                 );
               }}
