@@ -1,5 +1,5 @@
 import { cloudComputersEnabled } from "./computer-config";
-import { attachmentSchema, type ChatAttachment } from "./chat-attachments";
+import { attachmentSchema, removeAttachments, type ChatAttachment } from "./chat-attachments";
 import { z } from "zod";
 import {
   ActivityEventSchema,
@@ -651,6 +651,20 @@ export const orbitActions = {
       taskInWorkspace(d, conversationId);
       d.activeConversations[d.workspaceId] = conversationId;
     });
+  },
+  async deleteConversation(conversationId: string) {
+    const workspaceId = state.workspaceId;
+    let attachments: ChatAttachment[] = [];
+    update((d) => {
+      const conversation = taskInWorkspace(d, conversationId);
+      d.tasks = d.tasks.filter((t) => t.id !== conversationId);
+      if (d.activeConversations[workspaceId] === conversationId) delete d.activeConversations[workspaceId];
+      const retained = new Set(d.tasks.flatMap((t) => t.messages.flatMap((m) => (m.attachments ?? []).map((a) => a.id))));
+      attachments = conversation.messages.flatMap((m) => m.attachments ?? []).filter((a) => !retained.has(a.id));
+    });
+    inputPausedRuns.delete(conversationId);
+    try { await removeAttachments(workspaceId, attachments); }
+    catch { persistenceError = "Session deleted, but its local attachments could not be removed."; }
   },
   newConversation() {
     update((d) => {

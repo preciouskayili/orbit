@@ -19,25 +19,35 @@ async function request(workspaceId: string, path = "", method = "GET", body?: un
   if (!response.ok) throw new Error(typeof result.message === "string" ? result.message : "Computer request failed.");
   return result;
 }
+const revision = new Map<string, number>();
+function receive(workspaceId: string, machine: ReturnType<typeof MachineSchema.parse>) {
+  revision.set(workspaceId, (revision.get(workspaceId) ?? 0) + 1);
+  orbitActions.receiveCloudComputer(workspaceId, machine);
+}
 export const cloudComputers = {
+  async get(workspaceId: string, id: string) {
+    const machine = MachineSchema.parse(await request(workspaceId, `/${encodeURIComponent(id)}`));
+    receive(workspaceId, machine);
+  },
   async refresh(workspaceId: string) {
+    const startedAt = revision.get(workspaceId) ?? 0;
     const machines = MachinesResponseSchema.parse(await request(workspaceId));
-    orbitActions.reconcileCloudComputers(workspaceId, machines);
+    if (startedAt === (revision.get(workspaceId) ?? 0)) orbitActions.reconcileCloudComputers(workspaceId, machines);
   },
   async create(workspaceId: string, input: CreateMachineInput, requestId: string) {
     const machine = MachineSchema.parse(await request(workspaceId, "", "POST", { ...input, requestId }));
-    orbitActions.receiveCloudComputer(workspaceId, machine);
+    receive(workspaceId, machine);
     return machine.id;
   },
   async status(id: string, action: "start" | "stop") {
     const workspaceId = getOrbitState().workspaceId;
     const machine = MachineSchema.parse(await request(workspaceId, `/${encodeURIComponent(id)}/${action}`, "POST"));
-    orbitActions.receiveCloudComputer(workspaceId, machine);
+    receive(workspaceId, machine);
   },
   async rename(id: string, name: string) {
     const workspaceId = getOrbitState().workspaceId;
     const machine = MachineSchema.parse(await request(workspaceId, `/${encodeURIComponent(id)}`, "PATCH", { name }));
-    orbitActions.receiveCloudComputer(workspaceId, machine);
+    receive(workspaceId, machine);
   },
   async desktop(workspaceId: string, id: string) {
     return DesktopSessionSchema.parse(await request(workspaceId, `/${encodeURIComponent(id)}/desktop`, "POST"));

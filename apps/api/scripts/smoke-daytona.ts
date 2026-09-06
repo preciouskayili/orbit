@@ -25,6 +25,7 @@ try {
   console.log("Created integration-test computer:", id);
   await writeFile("/tmp/orbit-daytona-smoke.json", JSON.stringify({ id }), { mode: 0o600 });
   const daytona = new Daytona();
+  await call(`/${id}/start`, {});
   let sandbox = await daytona.get(id);
   const path = "/home/daytona/.orbit-persistence-" + randomUUID();
   const content = "Orbit persistence smoke test";

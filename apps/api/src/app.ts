@@ -1,4 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
+import { log, errorFields, withRequestId } from "./logger.js";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import express from "express";
 import cors from "cors";
 import { z } from "zod";
@@ -8,6 +9,26 @@ import { ComputerError, type ComputerService } from "./computers/service.js";
 export function createApp(options: { service?: ComputerService; token?: string; workspaceId: string }) {
   const app = express();
   app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    const requestId = randomUUID();
+    const started = performance.now();
+    const path = req.path;
+    res.locals.requestId = requestId;
+    res.setHeader("X-Request-ID", requestId);
+    log("info", "request.started", { requestId, method: req.method, path });
+    let completed = false;
+    res.on("finish", () => {
+      completed = true;
+      log(res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info", "request.finished", {
+        requestId, method: req.method, path, status: res.statusCode,
+        durationMs: Math.round(performance.now() - started),
+      });
+    });
+    res.on("close", () => {
+      if (!completed) log("warn", "request.disconnected", { requestId, method: req.method, path, durationMs: Math.round(performance.now() - started) });
+    });
+    withRequestId(requestId, next);
+  });
   const origins = new Set(["http://127.0.0.1:5173", "http://localhost:5173", "null"]);
   app.use(cors({ origin: (origin, callback) => callback(null, !!origin && origins.has(origin)), methods: ["GET", "POST", "PATCH"] }));
   app.use(express.json({ limit: "16kb" }));
@@ -51,6 +72,7 @@ export function createApp(options: { service?: ComputerService; token?: string; 
   app.use("/api/workspaces/:workspaceId/computers", router);
   app.use((_req, res) => res.status(404).json({ message: "Route not found" }));
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    log("error", "request.failed", { requestId: res.locals.requestId, ...errorFields(error) });
     if (error instanceof ComputerError) return res.status(error.status).json({ message: error.message });
     const status = (error as { status?: number; statusCode?: number })?.status ?? (error as { statusCode?: number })?.statusCode;
     if (status === 400) return res.status(400).json({ message: "Daytona rejected this configuration. Check your account’s per-computer CPU, memory, and disk limits." });

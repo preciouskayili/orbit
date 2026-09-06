@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import RFB from "@novnc/novnc/core/rfb.js";
+import type RFB from "@novnc/novnc";
 import type { Machine } from "@orbit/shared";
 import { cloudComputers } from "@/lib/cloud-computers";
 import { Button } from "./ui/button";
@@ -19,7 +19,8 @@ export function RemoteDesktop({ machine }: { machine: Machine }) {
     setConnected(false);
     setError("");
     const timer = setTimeout(() => {
-      void cloudComputers.desktop(machine.workspaceId!, machine.id).then((session) => {
+      void cloudComputers.desktop(machine.workspaceId!, machine.id).then(async (session) => {
+        const { default: RFB } = await import("@novnc/novnc");
         if (!active || !target.current) return;
         const url = new URL(session.url);
         if (url.protocol !== "wss:") throw new Error("Invalid desktop connection address.");

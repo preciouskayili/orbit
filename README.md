@@ -2,7 +2,7 @@
 
 Computers for agents. Work with your agent in a persistent conversation, give it a fleet of computers, watch their desktops, and work directly alongside them.
 
-This is a **local interactive frontend prototype**, not a cloud service. Agent responses, provisioning, desktop sessions, and execution are simulated. Projects, conversations, computers, files, schedules, and preferences persist in local storage.
+Orbit includes a **local interactive frontend prototype** and an optional **real Daytona computer integration**. Agent responses and agent execution are still simulated. In demo mode, provisioning and desktops are simulated too; in Daytona mode, computers run in your Daytona account.
 
 ## Run
 
@@ -22,7 +22,38 @@ pnpm build                       # production builds
 pnpm dev:api                     # independent legacy mock API
 ```
 
-`pnpm dev` also starts the legacy Express API at port 4000. The current frontend doesn't call it.
+`pnpm dev` starts the Express API at port 4000 and the desktop app. Cloud mode calls that API; demo mode runs without it.
+
+## Real Daytona computers
+
+Orbit now supports real Linux desktops through a local Daytona backend. Conversations and agents remain a local prototype; no agent executes commands on these computers yet.
+
+1. Copy `apps/api/.env.example` to `apps/api/.env`. Set `DAYTONA_API_KEY` and generate `ORBIT_API_TOKEN` with the command in that file.
+2. Copy `apps/desktop/.env.example` to `apps/desktop/.env`. Set `VITE_COMPUTER_PROVIDER=daytona` and copy **only the local API token** into `VITE_ORBIT_API_TOKEN`. Never put the Daytona key in the renderer.
+3. Run `pnpm dev` (or `pnpm dev:api` and `pnpm dev:desktop` separately). Restart the renderer when changing its environment.
+4. Open Computers and create a Linux desktop. Open it for live screen, mouse, and keyboard access. Browser, terminal, and files are the real applications on that desktop. Start/stop and rename use the API.
+
+Cloud mode hides the demo fleet. Creating from chat still opens the computer beside the conversation; opening from Computers uses the standalone tabs. The first cloud defaults are 2 CPU, 4 GB memory, and 10 GB disk. Resource limits depend on your Daytona account. Windows and macOS creation are disabled for this integration.
+
+The API binds to `127.0.0.1` and serves one configured workspace (`ORBIT_WORKSPACE_ID`, default `personal`). It requires a local bearer token and checks installation/workspace labels before every computer operation. `apps/api/.data/instance-id` is its durable installation identity: keep it to reconnect the same fleet. This is a single-user local backend, not hosted multi-user authentication.
+
+Computers keep their filesystem across stop/start. Automatic deletion is disabled, and the default inactivity auto-stop is 30 minutes (`DAYTONA_AUTO_STOP_MINUTES`). Closing a tab disconnects the viewer; it does not stop the computer. Use **Computer actions → Stop computer** when finished. The API keeps Daytona credentials server-side and issues 15-minute signed WebSocket links for noVNC. Reconnect requests a fresh link. Persistent records contain neither those links nor credentials.
+
+Creation requests use durable idempotency labels. If a request times out, retry the same configuration; already-created computers are reused. For a partially created fleet, completed computers remain in the fleet. Errors are surfaced instead of silently falling back to simulated desktops.
+
+API logs are JSON lines. `LOG_LEVEL=info` logs requests, status codes, durations, request IDs, and computer lifecycle operations; `debug` also logs fleet-refresh counts. Request IDs are returned in `X-Request-ID`. Logs deliberately exclude credentials, signed desktop URLs, request bodies, and raw SDK exceptions.
+
+```bash
+pnpm --filter @orbit/api test          # API authorization, ownership, lifecycle, logging
+pnpm --filter @orbit/desktop test      # frontend regression suite
+# LIVE: creates/reuses one billable test computer, verifies persistence and
+# a real desktop handshake, then leaves the computer stopped.
+pnpm --filter @orbit/api exec tsx scripts/smoke-daytona.ts
+```
+
+The live test records its retry ID in `/tmp/orbit-daytona-smoke-request.json`. Its computer stays available as **Orbit integration test**; remove it in Daytona when no longer needed. If the local API is unavailable during cleanup, the test also attempts to stop it directly through Daytona.
+
+Provider references: [Computer Use](https://www.daytona.io/docs/en/computer-use/), [Persistence](https://www.daytona.io/docs/en/persistence/), [SDK](https://www.daytona.io/docs/en/typescript-sdk/daytona/).
 
 ## Try the flow
 

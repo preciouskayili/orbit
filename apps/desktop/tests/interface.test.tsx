@@ -909,3 +909,25 @@ test("fleet opens a standalone desktop and the plus picker adds computers withou
   expect(getOrbitState().activeConversations.personal).toBe(sessionId);
   expect(getOrbitState().tasks.find((t) => t.id === sessionId)?.machineIds).toEqual([ids[0]]);
 });
+
+test("session rows show running spinners and allow deleting the open session", async () => {
+  const projectId = orbitActions.createProject("Session deletion", "");
+  const id = orbitActions.createConversation(projectId, "fleet-agent", "Delete this session");
+  const [computer] = orbitActions.createComputers({name:"Session deletion computer",os:"ubuntu",cpu:2,ramGb:4,storageGb:40});
+  orbitActions.attachComputers(id, [computer!]);
+  orbitActions.taskAction(id, "resume");
+  render(<MemoryRouter initialEntries={["/sessions/" + id]}><Sidebar /><Location /></MemoryRouter>);
+  expect(screen.getAllByRole("status", {name:"Delete this session is running"})).toHaveLength(2);
+  act(() => orbitActions.taskAction(id, "pause"));
+  expect(screen.queryByRole("status", {name:"Delete this session is running"})).toBeNull();
+  fireEvent.click(screen.getAllByRole("button", {name:"Session actions for Delete this session"})[0]!);
+  fireEvent.click(await screen.findByRole("menuitem", {name:"Delete session"}));
+  fireEvent.click(await screen.findByRole("button", {name:"Cancel"}));
+  expect(getOrbitState().tasks.some((t) => t.id === id)).toBe(true);
+  fireEvent.click(screen.getAllByRole("button", {name:"Session actions for Delete this session"})[0]!);
+  fireEvent.click(await screen.findByRole("menuitem", {name:"Delete session"}));
+  fireEvent.click(await screen.findByRole("button", {name:"Delete session",exact:true}));
+  await waitFor(() => expect(screen.getByTestId("location").textContent).toBe("/new"));
+  expect(screen.queryByRole("link", {name:"Delete this session"})).toBeNull();
+  expect(getOrbitState().machines.some((m) => m.id === computer)).toBe(true);
+});

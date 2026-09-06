@@ -235,3 +235,29 @@ test("workspace navigation can release an existing input lease but cannot acquir
   a.endInteraction(mid, token);
   expect(store.getOrbitState().control[mid]).toBe("agent");
 });
+
+test("deleting a session releases its computers and active selection without deleting computer files", async () => {
+  const { projectId, conversationId } = setup();
+  const actions = store.orbitActions;
+  const [machineId] = actions.createFleet(projectId, input);
+  actions.attachComputers(conversationId, [machineId!]);
+  const lease = actions.beginInteraction(machineId!);
+  actions.saveFile(machineId!, "keep.txt", "Keep this computer file");
+  actions.endInteraction(machineId!, lease);
+  actions.taskAction(conversationId, "resume");
+  await actions.deleteConversation(conversationId);
+  expect(store.getOrbitState().tasks.some((t) => t.id === conversationId)).toBe(false);
+  expect(store.getOrbitState().activeConversations.personal).toBeUndefined();
+  expect(store.getOrbitState().machines.find((m) => m.id === machineId)?.status).toBe("running");
+  expect(store.getOrbitState().files[machineId!]?.["keep.txt"]).toBe("Keep this computer file");
+  const next = actions.createSession(projectId);
+  expect(() => actions.attachComputers(next, [machineId!])).not.toThrow();
+});
+
+test("session deletion rejects a session from another workspace", async () => {
+  const { conversationId } = setup();
+  store.orbitActions.switchWorkspace("team");
+  const before = store.getOrbitState();
+  await expect(store.orbitActions.deleteConversation(conversationId)).rejects.toThrow("current workspace");
+  expect(store.getOrbitState()).toBe(before);
+});

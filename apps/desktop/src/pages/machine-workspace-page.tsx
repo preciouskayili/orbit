@@ -1,3 +1,5 @@
+import { cloudComputersEnabled } from "@/lib/computer-config";
+import { cloudComputers } from "@/lib/cloud-computers";
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { MachineViewport } from "@/components/machine-viewport";
@@ -10,6 +12,16 @@ export function MachineWorkspacePage() {
   const state = useOrbit();
   const machines = workspaceComputers(state);
   const machine = machines.find((m) => m.id === machineId);
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => {
+    if (!cloudComputersEnabled || machine) return;
+    let active = true;
+    setLoadError("");
+    void cloudComputers.get(state.workspaceId, machineId).catch((cause) => {
+      if (active) setLoadError((cause as Error).message);
+    });
+    return () => { active = false; };
+  }, [machineId, state.workspaceId]);
   const [opened, setOpened] = useState<{ workspaceId: string; ids: string[] }>({
     workspaceId: state.workspaceId,
     ids: [],
@@ -29,10 +41,11 @@ export function MachineWorkspacePage() {
       navigate(nextId ? "/computers/" + nextId : "/computers");
     }
   };
+  if (!machine && cloudComputersEnabled && !loadError) return <Page title="Computer"><p role="status" className="p-5 text-xs text-zinc-500">Loading computer…</p></Page>;
   if (!machine)
     return (
       <Page title="Computer not found">
-        <Empty title="This computer isn't in the current workspace">
+        <Empty title={loadError || "This computer isn't in the current workspace"}>
           <Link to="/computers" className="underline">
             Back to computers
           </Link>

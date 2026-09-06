@@ -1,3 +1,4 @@
+import { log } from "./logger.js";
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -24,5 +25,5 @@ const service = process.env.DAYTONA_API_KEY ? new DaytonaComputers(new Daytona({
 }) : undefined;
 const app = createApp({ service, token: process.env.ORBIT_API_TOKEN, workspaceId });
 app.listen(port, "127.0.0.1", () => {
-  console.log(`[orbit-api] listening on http://127.0.0.1:${port}; computers: ${service ? "Daytona" : "not configured"}`);
+  log("info", "api.listening", { host: "127.0.0.1", port, workspaceId, computers: service ? "daytona" : "unconfigured", localTokenConfigured: Boolean(process.env.ORBIT_API_TOKEN), autoStopMinutes });
 });

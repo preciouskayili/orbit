@@ -1,3 +1,6 @@
+import { SidebarSession } from "./sidebar-session";
+import { Button } from "./ui/button";
+import { filePreview } from "@/lib/file-preview";
 import { OrbitLogo } from "./orbit-logo";
 import { CommandPalette } from "./command-palette";
 import { useState } from "react";
@@ -49,12 +52,17 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifications, setNotifications] = useState(false);
+  const [deleteId, setDeleteId] = useState<string>();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const projects = state.projects.filter(
     (p) => p.workspaceId === state.workspaceId,
   );
   const tasks = state.tasks.filter((t) =>
     projects.some((p) => p.id === t.projectId),
   );
+  const deletingTask = tasks.find((t) => t.id === deleteId);
+  const requestDelete = (id: string) => { setDeleteError(""); setDeleteId(id); };
   const workspace = state.workspaces.find((w) => w.id === state.workspaceId)!;
   const reviews = tasks.filter((t) => t.status === "review");
   const initials = state.settings.name
@@ -216,23 +224,9 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                           {tasks
                             .filter((t) => t.projectId === project.id)
                             .map((task) => (
-                              <Link
-                                key={task.id}
-                                to={"/sessions/" + task.id}
-                                onClick={() =>
-                                  orbitActions.openConversation(task.id)
-                                }
-                                className={
-                                  row +
-                                  " !pl-10 " +
-                                  (task.id ===
-                                  state.activeConversations[state.workspaceId]
-                                    ? "bg-white/[0.055] text-zinc-200"
-                                    : "text-zinc-500")
-                                }
-                              >
-                                <span className="truncate">{task.title}</span>
-                              </Link>
+                              <SidebarSession key={task.id} task={task} indented
+                                selected={task.id === state.activeConversations[state.workspaceId]}
+                                onDelete={() => requestDelete(task.id)} />
                             ))}
                           {projectComputers(state, project.id).map((m) => (
                             <Link
@@ -259,17 +253,9 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                 Recents
               </h2>
               {tasks.slice(0, 15).map((task) => (
-                <Link
-                  key={task.id}
-                  to={"/sessions/" + task.id}
-                  onClick={() => orbitActions.openConversation(task.id)}
-                  className={row + " text-zinc-400"}
-                >
-                  <span className="min-w-0 flex-1 truncate">{task.title}</span>
-                  {task.status === "review" && (
-                    <span className="size-2 rounded-full bg-sky-300" />
-                  )}
-                </Link>
+                <SidebarSession key={task.id} task={task}
+                  selected={task.id === state.activeConversations[state.workspaceId]}
+                  onDelete={() => requestDelete(task.id)} />
               ))}
               {!tasks.length && (
                 <p className="px-2.5 py-2 text-xs text-zinc-600">
@@ -356,6 +342,32 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </DialogContent>
         </Dialog>
       </aside>
+      <Dialog open={Boolean(deletingTask)} onOpenChange={(open) => { if (!open && !deleting) setDeleteId(undefined); }}>
+        <DialogContent className="p-6">
+          <DialogTitle>Delete session?</DialogTitle>
+          <DialogDescription className="mt-2">
+            Delete “{deletingTask?.title}” and its messages? Its computers and their files will stay available.
+          </DialogDescription>
+          {deleteError && <p role="alert" className="mt-3 text-xs text-rose-300">{deleteError}</p>}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="ghost" disabled={deleting} onClick={() => setDeleteId(undefined)}>Cancel</Button>
+            <Button variant="destructive" disabled={deleting} onClick={async () => {
+              if (!deletingTask) return;
+              const id = deletingTask.id;
+              const currentRoute = /^\/(?:sessions|tasks)\/([^/]+)/.exec(location.pathname)?.[1] === id;
+              const active = state.activeConversations[state.workspaceId] === id;
+              setDeleting(true);
+              try {
+                await orbitActions.deleteConversation(id);
+                if (active || currentRoute) filePreview.close();
+                if (currentRoute) navigate("/new", { replace: true });
+                setDeleteId(undefined);
+              } catch (cause) { setDeleteError((cause as Error).message); }
+              finally { setDeleting(false); }
+            }}>{deleting ? "Deleting…" : "Delete session"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </>
   );

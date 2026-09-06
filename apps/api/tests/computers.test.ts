@@ -47,6 +47,7 @@ function fixture() {
           this.state = "stopped";
         },
         computerUse: {
+          async getStatus() { return { status: desktopStarts ? "active" : "inactive" }; },
           async start() {
             desktopStarts++;
           },
@@ -98,6 +99,8 @@ test("creation retries reuse the durable provider record and lifecycle preserves
   assert.equal(url.protocol, "wss:");
   assert.equal(url.pathname, "/websockify");
   assert.equal(url.searchParams.get("token"), "short-lived");
+  await f.service.desktop(machine.id);
+  assert.equal(f.desktopStarts(), 1);
   assert.equal((await f.service.list()).length, 1);
   assert.equal((await f.other.list()).length, 0);
   for (const action of [

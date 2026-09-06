@@ -1,3 +1,4 @@
+import { log, errorFields } from "../logger.js";
 import { Daytona, type Sandbox } from "@daytona/sdk";
 import { MachineSchema, type Machine, type CreateMachineInput } from "@orbit/shared";
 
@@ -49,23 +50,34 @@ export class DaytonaComputers implements ComputerService {
       lastSeenAt: new Date().toISOString(),
     });
   }
-  private async exclusive<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  private async exclusive<T>(key: string, action: string, operation: () => Promise<T>): Promise<T> {
     if (this.locks.has(key)) throw new ComputerError(409, "A computer operation is already in progress. Wait for it to finish.");
+    const started = performance.now();
+    log("info", "computer.operation.started", { action, computerKey: key });
     const task = operation();
     this.locks.set(key, task);
-    try { return await task; } finally { this.locks.delete(key); }
+    try {
+      const result = await task;
+      log("info", "computer.operation.finished", { action, computerKey: key, durationMs: Math.round(performance.now() - started) });
+      return result;
+    } catch (error) {
+      log("error", "computer.operation.failed", { action, computerKey: key, durationMs: Math.round(performance.now() - started), ...errorFields(error) });
+      throw error;
+    } finally { this.locks.delete(key); }
   }
   async list() {
     const machines: Machine[] = [];
     for await (const sandbox of this.client.list({ labels: this.labels() })) machines.push(this.machine(sandbox));
+    log("debug", "computers.refreshed", { workspaceId: this.options.workspaceId, count: machines.length });
     return machines;
   }
   async get(id: string) { return this.machine(await this.owned(id)); }
   async create(input: CreateMachineInput, requestId: string) {
-    return this.exclusive("create:" + requestId, async () => {
+    return this.exclusive("create:" + requestId, "create", async () => {
       // A retry after a lost response finds the original machine, including
       // after restarting Orbit's API. The provider name also enforces uniqueness.
       for await (const existing of this.client.list({ labels: { ...this.labels(), "orbit-request": requestId } })) {
+        log("info", "computer.creation.reused", { computerId: existing.id, requestId });
         return this.machine(existing);
       }
       const sandbox = await this.client.create({
@@ -77,11 +89,12 @@ export class DaytonaComputers implements ComputerService {
         public: false, ephemeral: false, autoDeleteInterval: -1,
         autoStopInterval: this.options.autoStopMinutes,
       }, { timeout: 180 });
+      log("info", "computer.created", { computerId: sandbox.id, cpu: sandbox.cpu, memoryGb: sandbox.memory, diskGb: sandbox.disk });
       return this.machine(sandbox);
     });
   }
   async rename(id: string, name: string) {
-    return this.exclusive(id, async () => {
+    return this.exclusive(id, "rename", async () => {
       const sandbox = await this.owned(id);
       await sandbox.setLabels({ ...sandbox.labels, "orbit-name": name });
       await sandbox.refreshData();
@@ -89,7 +102,7 @@ export class DaytonaComputers implements ComputerService {
     });
   }
   async status(id: string, action: "start" | "stop") {
-    return this.exclusive(id, async () => {
+    return this.exclusive(id, action, async () => {
       const sandbox = await this.owned(id);
       if (action === "start" && sandbox.state !== "started") await sandbox.start(120);
       if (action === "stop" && sandbox.state !== "stopped" && sandbox.state !== "archived") await sandbox.stop(120);
@@ -98,7 +111,7 @@ export class DaytonaComputers implements ComputerService {
     });
   }
   async desktop(id: string) {
-    return this.exclusive(id, async () => {
+    return this.exclusive(id, "desktop.connect", async () => {
       const sandbox = await this.owned(id);
       if (sandbox.state !== "started") throw new ComputerError(409, "Start this computer before connecting.");
       if ((await sandbox.computerUse.getStatus()).status !== "active") await sandbox.computerUse.start();
