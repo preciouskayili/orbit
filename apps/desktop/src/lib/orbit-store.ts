@@ -1,6 +1,10 @@
 import { fallbackTitle } from "./session-titles";
 import { cloudComputersEnabled, liveAgentsEnabled } from "./computer-config";
-import { attachmentSchema, removeAttachments, type ChatAttachment } from "./chat-attachments";
+import {
+  attachmentSchema,
+  removeAttachments,
+  type ChatAttachment,
+} from "./chat-attachments";
 import { z } from "zod";
 import {
   ActivityEventSchema,
@@ -109,12 +113,27 @@ function initialState(): OrbitState {
     version: 1,
     activeConversations: {},
     workspaceId: "personal",
-    workspaces: cloudComputersEnabled ? [{ id: "personal", name: "Personal workspace" }] : [
-      { id: "personal", name: "Personal workspace" },
-      { id: "team", name: "Orbit team" },
-    ],
-    projects: cloudComputersEnabled ? [{ id: "personal", workspaceId: "personal", name: "Personal", description: "", machineCount: 0, updatedAt: now() }] : seed.projects.map((p) => ({ ...p, workspaceId: "personal" })),
-    machines: cloudComputersEnabled ? [] : seed.machines.map((m) => ({ ...m, workspaceId: "personal" })),
+    workspaces: cloudComputersEnabled
+      ? [{ id: "personal", name: "Personal workspace" }]
+      : [
+          { id: "personal", name: "Personal workspace" },
+          { id: "team", name: "Orbit team" },
+        ],
+    projects: cloudComputersEnabled
+      ? [
+          {
+            id: "personal",
+            workspaceId: "personal",
+            name: "Personal",
+            description: "",
+            machineCount: 0,
+            updatedAt: now(),
+          },
+        ]
+      : seed.projects.map((p) => ({ ...p, workspaceId: "personal" })),
+    machines: cloudComputersEnabled
+      ? []
+      : seed.machines.map((m) => ({ ...m, workspaceId: "personal" })),
     activity: cloudComputersEnabled ? [] : seed.activity,
     messages: cloudComputersEnabled ? [] : seed.messages,
     agents: [
@@ -131,7 +150,10 @@ function initialState(): OrbitState {
     schedules: [],
     control: {},
     files: {},
-    settings: { name: cloudComputersEnabled ? "You" : "Precious Kayili", notifications: true },
+    settings: {
+      name: cloudComputersEnabled ? "You" : "Precious Kayili",
+      notifications: true,
+    },
   };
 }
 let persistenceError = "";
@@ -150,9 +172,15 @@ function restore(): OrbitState {
     }
     const result = stateSchema.safeParse(decoded);
     if (result.success) {
-      for (const task of result.data.tasks) if (!task.titleSource && (task.title === task.prompt.slice(0,65) || task.title === 'New session')) {
-        task.title = fallbackTitle(task.messages); task.titleSource = 'automatic';
-      }
+      for (const task of result.data.tasks)
+        if (
+          !task.titleSource &&
+          (task.title === task.prompt.slice(0, 65) ||
+            task.title === "New session")
+        ) {
+          task.title = fallbackTitle(task.messages);
+          task.titleSource = "automatic";
+        }
       return { ...result.data, control: {} };
     } // Desktop input locks are transient.
     persistenceError =
@@ -303,7 +331,13 @@ function machineInWorkspace(draft: OrbitState, machineId: string) {
   const workspaceId =
     machine?.workspaceId ??
     draft.projects.find((p) => p.id === machine?.projectId)?.workspaceId;
-  if (!machine || workspaceId !== draft.workspaceId || (cloudComputersEnabled ? machine.provider !== "daytona" : Boolean(machine.provider)))
+  if (
+    !machine ||
+    workspaceId !== draft.workspaceId ||
+    (cloudComputersEnabled
+      ? machine.provider !== "daytona"
+      : Boolean(machine.provider))
+  )
     throw new Error("Computer is not in the current workspace.");
   return machine;
 }
@@ -350,7 +384,8 @@ function requestComputer(
       content:
         "Using **" +
         machine.name +
-        "** under the workspace-computer permission you granted this conversation." + (liveAgentsEnabled ? "" : " This is a simulated allocation."),
+        "** under the workspace-computer permission you granted this conversation." +
+        (liveAgentsEnabled ? "" : " This is a simulated allocation."),
     });
   } else {
     conversation.requests.push({ id: id(), machineId, status: "pending" });
@@ -385,7 +420,8 @@ function provision(
           (cloudComputersEnabled ? m.provider === "daytona" : !m.provider) &&
           (m.workspaceId ??
             draft.projects.find((p) => p.id === m.projectId)?.workspaceId) ===
-            draft.workspaceId && m.name === name,
+            draft.workspaceId &&
+          m.name === name,
       )
     )
       name = baseName + " (" + suffix++ + ")";
@@ -421,27 +457,49 @@ function provision(
 // operation. The backend must enforce the same coordination per remote session.
 const inputLeases = new Map<string, { token: string }>();
 const deletingConversations = new Set<string>();
-export const isConversationDeleting = (id: string) => deletingConversations.has(id);
+export const isConversationDeleting = (id: string) =>
+  deletingConversations.has(id);
 const inputPausedRuns = new Set<string>();
 export const orbitActions = {
   beginAgentRun(workspaceId: string, run: AgentRun) {
     update((d) => {
-      if (d.workspaceId !== workspaceId) throw new Error("The workspace changed before the agent started.");
+      if (d.workspaceId !== workspaceId)
+        throw new Error("The workspace changed before the agent started.");
       const task = taskInWorkspace(d, run.conversationId);
-      if (task.liveRun && !["completed", "failed", "cancelled"].includes(task.liveRun.status)) throw new Error("An agent is already active in this conversation.");
+      if (
+        task.liveRun &&
+        !["completed", "failed", "cancelled"].includes(task.liveRun.status)
+      )
+        throw new Error("An agent is already active in this conversation.");
       task.liveRun = run;
       task.status = "running";
     });
   },
   receiveAgentRun(workspaceId: string, run: AgentRun) {
-    const current = state.tasks.find((t) => t.id === run.conversationId)?.liveRun;
-    if (current?.id !== run.id || JSON.stringify(current) === JSON.stringify(run)) return;
+    const current = state.tasks.find(
+      (t) => t.id === run.conversationId,
+    )?.liveRun;
+    if (
+      current?.id !== run.id ||
+      JSON.stringify(current) === JSON.stringify(run)
+    )
+      return;
     update((d) => {
-      const task = d.tasks.find((t) => t.id === run.conversationId && d.projects.some((p) => p.id === t.projectId && p.workspaceId === workspaceId));
+      const task = d.tasks.find(
+        (t) =>
+          t.id === run.conversationId &&
+          d.projects.some(
+            (p) => p.id === t.projectId && p.workspaceId === workspaceId,
+          ),
+      );
       if (!task || task.liveRun?.id !== run.id) return;
       task.liveRun = run;
-      task.messages = [...task.messages.filter((m) => m.runId !== run.id), ...run.messages.map((m) => ({ ...m, runId: run.id }))];
-      if (!["completed", "cancelled"].includes(task.status)) task.status = run.status === "running" ? "running" : "paused";
+      task.messages = [
+        ...task.messages.filter((m) => m.runId !== run.id),
+        ...run.messages.map((m) => ({ ...m, runId: run.id })),
+      ];
+      if (!["completed", "cancelled"].includes(task.status))
+        task.status = run.status === "running" ? "running" : "paused";
     });
   },
   beginInteraction(machineId: string) {
@@ -537,7 +595,8 @@ export const orbitActions = {
   },
   receiveCloudComputer(workspaceId: string, machine: Machine) {
     const parsed = MachineSchema.parse(machine);
-    if (parsed.provider !== "daytona" || parsed.workspaceId !== workspaceId) throw new Error("Invalid computer ownership.");
+    if (parsed.provider !== "daytona" || parsed.workspaceId !== workspaceId)
+      throw new Error("Invalid computer ownership.");
     update((d) => {
       if (!d.workspaces.some((w) => w.id === workspaceId)) return;
       const index = d.machines.findIndex((m) => m.id === parsed.id);
@@ -547,10 +606,17 @@ export const orbitActions = {
   },
   reconcileCloudComputers(workspaceId: string, machines: Machine[]) {
     const parsed = machines.map((machine) => MachineSchema.parse(machine));
-    if (parsed.some((m) => m.provider !== "daytona" || m.workspaceId !== workspaceId)) throw new Error("Invalid computer ownership.");
+    if (
+      parsed.some(
+        (m) => m.provider !== "daytona" || m.workspaceId !== workspaceId,
+      )
+    )
+      throw new Error("Invalid computer ownership.");
     update((d) => {
       if (!d.workspaces.some((w) => w.id === workspaceId)) return;
-      d.machines = d.machines.filter((m) => m.provider !== "daytona" || m.workspaceId !== workspaceId);
+      d.machines = d.machines.filter(
+        (m) => m.provider !== "daytona" || m.workspaceId !== workspaceId,
+      );
       d.machines.push(...parsed);
     });
   },
@@ -575,7 +641,8 @@ export const orbitActions = {
       const machine = d.machines.find((m) => m.id === machineId);
       if (!machine) throw new Error("Computer not found.");
       machineInWorkspace(d, machine.id);
-      if (machine.provider === "daytona") throw new Error("Use the computers API for this computer.");
+      if (machine.provider === "daytona")
+        throw new Error("Use the computers API for this computer.");
       machine.status = status;
       machine.lastSeenAt = now();
       if (status === "stopped")
@@ -674,11 +741,19 @@ export const orbitActions = {
   },
   saveAgent(input: Omit<OrbitAgent, "workspaceId" | "id">, agentId?: string) {
     update((d) => {
-      input = z.object({ name: z.string().trim().min(1).max(60), instructions: z.string().max(16000), skills: z.array(z.enum(["terminal", "browser", "files"])).max(3), mcpServerIds: z.array(z.string().uuid()).max(20).optional() }).parse(input);
+      input = z
+        .object({
+          name: z.string().trim().min(1).max(60),
+          instructions: z.string().max(16000),
+          skills: z.array(z.enum(["terminal", "browser", "files"])).max(3),
+          mcpServerIds: z.array(z.string().uuid()).max(20).optional(),
+        })
+        .parse(input);
       const existing = d.agents.find(
         (a) => a.id === agentId && a.workspaceId === d.workspaceId,
       );
-      if (agentId && !existing) throw new Error("This profile no longer exists in this workspace.");
+      if (agentId && !existing)
+        throw new Error("This profile no longer exists in this workspace.");
       if (existing) Object.assign(existing, input);
       else d.agents.push({ ...input, id: id(), workspaceId: d.workspaceId });
     });
@@ -693,85 +768,151 @@ export const orbitActions = {
   async deleteConversation(conversationId: string) {
     const workspaceId = state.workspaceId;
     const task = taskInWorkspace(state, conversationId);
-    if (deletingConversations.has(conversationId)) throw new Error("This conversation is being deleted.");
+    if (deletingConversations.has(conversationId))
+      throw new Error("This conversation is being deleted.");
     deletingConversations.add(conversationId);
     try {
-    if (task.liveRun && liveAgentsEnabled) {
-      const { liveAgents } = await import('./live-agents');
-      await liveAgents.deleteConversation(workspaceId, conversationId);
+      if (task.liveRun && liveAgentsEnabled) {
+        const { liveAgents } = await import("./live-agents");
+        await liveAgents.deleteConversation(workspaceId, conversationId);
+      }
+      if (state.workspaceId !== workspaceId)
+        throw new Error("Workspace changed; try again.");
+      let attachments: ChatAttachment[] = [];
+      update((d) => {
+        const conversation = taskInWorkspace(d, conversationId);
+        d.tasks = d.tasks.filter((t) => t.id !== conversationId);
+        if (d.activeConversations[workspaceId] === conversationId)
+          delete d.activeConversations[workspaceId];
+        const retained = new Set(
+          d.tasks.flatMap((t) =>
+            t.messages.flatMap((m) => (m.attachments ?? []).map((a) => a.id)),
+          ),
+        );
+        attachments = conversation.messages
+          .flatMap((m) => m.attachments ?? [])
+          .filter((a) => !retained.has(a.id));
+      });
+      inputPausedRuns.delete(conversationId);
+      try {
+        await removeAttachments(workspaceId, attachments);
+      } catch {
+        persistenceError =
+          "Session deleted, but its local attachments could not be removed.";
+      }
+    } finally {
+      deletingConversations.delete(conversationId);
     }
-    if (state.workspaceId !== workspaceId) throw new Error('Workspace changed; try again.');
-    let attachments: ChatAttachment[] = [];
-    update((d) => {
-      const conversation = taskInWorkspace(d, conversationId);
-      d.tasks = d.tasks.filter((t) => t.id !== conversationId);
-      if (d.activeConversations[workspaceId] === conversationId) delete d.activeConversations[workspaceId];
-      const retained = new Set(d.tasks.flatMap((t) => t.messages.flatMap((m) => (m.attachments ?? []).map((a) => a.id))));
-      attachments = conversation.messages.flatMap((m) => m.attachments ?? []).filter((a) => !retained.has(a.id));
-    });
-    inputPausedRuns.delete(conversationId);
-    try { await removeAttachments(workspaceId, attachments); }
-    catch { persistenceError = "Session deleted, but its local attachments could not be removed."; }
-    } finally { deletingConversations.delete(conversationId); }
   },
   async deleteProject(projectId: string) {
     const workspace = state.workspaceId;
     projectInWorkspace(state, projectId);
-    const tasks = state.tasks.filter(t => t.projectId === projectId);
-    if (tasks.some(t => deletingConversations.has(t.id))) throw new Error("A session in this folder is already being deleted.");
-    tasks.forEach(t => deletingConversations.add(t.id));
+    const tasks = state.tasks.filter((t) => t.projectId === projectId);
+    if (tasks.some((t) => deletingConversations.has(t.id)))
+      throw new Error("A session in this folder is already being deleted.");
+    tasks.forEach((t) => deletingConversations.add(t.id));
     try {
-    if (liveAgentsEnabled) {
-      const { liveAgents } = await import('./live-agents');
-      for (const task of tasks) if (task.liveRun) await liveAgents.deleteConversation(workspace, task.id);
+      if (liveAgentsEnabled) {
+        const { liveAgents } = await import("./live-agents");
+        for (const task of tasks)
+          if (task.liveRun)
+            await liveAgents.deleteConversation(workspace, task.id);
+      }
+      if (workspace !== state.workspaceId)
+        throw new Error("Workspace changed; try again.");
+      let attachments: ChatAttachment[] = [];
+      update((d) => {
+        projectInWorkspace(d, projectId);
+        const ids = new Set(tasks.map((t) => t.id));
+        if (d.tasks.some((t) => t.projectId === projectId && !ids.has(t.id)))
+          throw new Error(
+            "A new session was added. Try deleting the folder again.",
+          );
+        d.tasks = d.tasks.filter((t) => !ids.has(t.id));
+        d.projects = d.projects.filter((p) => p.id !== projectId);
+        d.schedules = d.schedules.filter((s) => s.projectId !== projectId);
+        d.activity = d.activity.filter((a) => a.projectId !== projectId);
+        d.messages = d.messages.filter((m) => m.projectId !== projectId);
+        if (ids.has(d.activeConversations[workspace] ?? ""))
+          delete d.activeConversations[workspace];
+        d.machines.forEach((m) => {
+          if (m.projectId === projectId) {
+            m.workspaceId ??= workspace;
+            m.projectId = "";
+          }
+        });
+        const retained = new Set(
+          d.tasks.flatMap((t) =>
+            t.messages.flatMap((m) => (m.attachments ?? []).map((a) => a.id)),
+          ),
+        );
+        attachments = tasks
+          .flatMap((t) => t.messages.flatMap((m) => m.attachments ?? []))
+          .filter((a) => !retained.has(a.id));
+      });
+      tasks.forEach((t) => inputPausedRuns.delete(t.id));
+      try {
+        await removeAttachments(workspace, attachments);
+      } catch {
+        persistenceError =
+          "Folder deleted, but some local attachments could not be removed.";
+      }
+    } finally {
+      tasks.forEach((t) => deletingConversations.delete(t.id));
     }
-    if (workspace !== state.workspaceId) throw new Error('Workspace changed; try again.');
-    let attachments: ChatAttachment[] = [];
-    update(d => {
-      projectInWorkspace(d, projectId);
-      const ids = new Set(tasks.map(t => t.id));
-      if (d.tasks.some(t => t.projectId === projectId && !ids.has(t.id))) throw new Error('A new session was added. Try deleting the folder again.');
-      d.tasks = d.tasks.filter(t => !ids.has(t.id));
-      d.projects = d.projects.filter(p => p.id !== projectId);
-      d.schedules = d.schedules.filter(s => s.projectId !== projectId);
-      d.activity = d.activity.filter(a => a.projectId !== projectId);
-      d.messages = d.messages.filter(m => m.projectId !== projectId);
-      if (ids.has(d.activeConversations[workspace] ?? '')) delete d.activeConversations[workspace];
-      d.machines.forEach(m => { if (m.projectId === projectId) { m.workspaceId ??= workspace; m.projectId = ''; } });
-      const retained = new Set(d.tasks.flatMap(t => t.messages.flatMap(m => (m.attachments ?? []).map(a => a.id))));
-      attachments = tasks.flatMap(t => t.messages.flatMap(m => m.attachments ?? [])).filter(a => !retained.has(a.id));
-    });
-    tasks.forEach(t => inputPausedRuns.delete(t.id));
-    try { await removeAttachments(workspace, attachments); } catch { persistenceError = 'Folder deleted, but some local attachments could not be removed.'; }
-    } finally { tasks.forEach(t => deletingConversations.delete(t.id)); }
   },
-  renameConversation(conversationId: string, title: string, source: 'manual' | 'generated' = 'manual', workspace = state.workspaceId) {
+  renameConversation(
+    conversationId: string,
+    title: string,
+    source: "manual" | "generated" = "manual",
+    workspace = state.workspaceId,
+  ) {
     if (workspace !== state.workspaceId) return;
-    update(d => {
+    update((d) => {
       const task = taskInWorkspace(d, conversationId);
-      if (source === 'generated' && task.titleSource === 'manual') return;
-      if (!title.trim() || title.trim().length > 55) throw new Error('Use a title between 1 and 55 characters.');
-      task.title = title.trim(); task.titleSource = source;
+      if (source === "generated" && task.titleSource === "manual") return;
+      if (!title.trim() || title.trim().length > 55)
+        throw new Error("Use a title between 1 and 55 characters.");
+      task.title = title.trim();
+      task.titleSource = source;
     });
   },
   setConversationModel(conversationId: string, model: string) {
-    update(d => {
+    update((d) => {
       const task = taskInWorkspace(d, conversationId);
-      if (task.liveRun && !['completed','failed','cancelled'].includes(task.liveRun.status)) throw new Error('Stop the current run before switching models.');
+      if (
+        task.liveRun &&
+        !["completed", "failed", "cancelled"].includes(task.liveRun.status)
+      )
+        throw new Error("Stop the current run before switching models.");
       task.model = model;
     });
   },
   deleteAgent(agentId: string) {
-    update(d => {
-      if (d.tasks.some(t => t.agentId === agentId)) throw new Error('This profile is used by a conversation. Change its profile before deleting it.');
-      d.agents = d.agents.filter(a => a.id !== agentId || a.workspaceId !== d.workspaceId);
+    update((d) => {
+      if (d.tasks.some((t) => t.agentId === agentId))
+        throw new Error(
+          "This profile is used by a conversation. Change its profile before deleting it.",
+        );
+      d.agents = d.agents.filter(
+        (a) => a.id !== agentId || a.workspaceId !== d.workspaceId,
+      );
     });
   },
   setConversationAgent(conversationId: string, agentId: string) {
-    update(d => {
+    update((d) => {
       const task = taskInWorkspace(d, conversationId);
-      if (task.liveRun && !['completed','failed','cancelled'].includes(task.liveRun.status)) throw new Error('Stop the current run before switching profiles.');
-      if (!d.agents.some(a => a.id === agentId && a.workspaceId === d.workspaceId)) throw new Error('Choose a profile in this workspace.');
+      if (
+        task.liveRun &&
+        !["completed", "failed", "cancelled"].includes(task.liveRun.status)
+      )
+        throw new Error("Stop the current run before switching profiles.");
+      if (
+        !d.agents.some(
+          (a) => a.id === agentId && a.workspaceId === d.workspaceId,
+        )
+      )
+        throw new Error("Choose a profile in this workspace.");
       task.agentId = agentId;
     });
   },
@@ -840,11 +981,15 @@ export const orbitActions = {
         artifacts: [],
         messages: [
           { role: "user", content: prompt.trim(), attachments },
-          ...(!liveAgentsEnabled ? [{
-            role: "assistant",
-            content:
-              "Let’s work on this together. Attach an existing computer or create one below, and you can inspect its desktop alongside our conversation. This is a local preview: responses and execution are simulated until the agent backend is connected.",
-          } as const] : []),
+          ...(!liveAgentsEnabled
+            ? [
+                {
+                  role: "assistant",
+                  content:
+                    "Let’s work on this together. Attach an existing computer or create one below, and you can inspect its desktop alongside our conversation. This is a local preview: responses and execution are simulated until the agent backend is connected.",
+                } as const,
+              ]
+            : []),
         ],
       });
       d.activeConversations[d.workspaceId] = conversationId;
@@ -916,18 +1061,21 @@ export const orbitActions = {
   ) {
     update((d) => {
       const task = taskInWorkspace(d, taskId);
-      if (deletingConversations.has(taskId)) throw new Error("This conversation is being deleted.");
+      if (deletingConversations.has(taskId))
+        throw new Error("This conversation is being deleted.");
       if (!content.trim()) return;
       if (!task.prompt) {
         task.prompt = content.trim();
-
       }
       task.messages.push({
         role: "user",
         content: content.trim(),
         attachments,
       });
-      if (!task.titleSource || task.titleSource === "automatic") { task.title = fallbackTitle(task.messages); task.titleSource = "automatic"; }
+      if (!task.titleSource || task.titleSource === "automatic") {
+        task.title = fallbackTitle(task.messages);
+        task.titleSource = "automatic";
+      }
       mentionedComputerIds.forEach((mid) => requestComputer(d, task, mid));
       if (
         !mentionedComputerIds.length &&
@@ -949,11 +1097,12 @@ export const orbitActions = {
         );
         if (machine) requestComputer(d, task, machine.id);
       }
-      if (!liveAgentsEnabled) task.messages.push({
-        role: "assistant",
-        content:
-          "Your instructions are saved with our conversation. This prototype records context; a connected agent will respond and act on it.",
-      });
+      if (!liveAgentsEnabled)
+        task.messages.push({
+          role: "assistant",
+          content:
+            "Your instructions are saved with our conversation. This prototype records context; a connected agent will respond and act on it.",
+        });
     });
   },
   requestAvailableComputer(conversationId: string) {
@@ -1002,7 +1151,9 @@ export const orbitActions = {
       conversation.messages.push({
         role: "assistant",
         content: allow
-          ? liveAgentsEnabled ? "Access granted for this conversation. The agent can now use this computer." : "Access granted for this conversation. Open the computer to follow along, then continue the demo when you’re ready."
+          ? liveAgentsEnabled
+            ? "Access granted for this conversation. The agent can now use this computer."
+            : "Access granted for this conversation. Open the computer to follow along, then continue the demo when you’re ready."
           : "Understood. I won’t use that computer. Mention another or attach one you’re comfortable sharing.",
       });
     });

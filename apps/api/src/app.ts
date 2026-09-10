@@ -4,6 +4,7 @@ import { integrationRoutes } from "./integrations/routes.js";
 import { log, errorFields, withRequestId } from "./logger.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import express from "express";
+import morgan from "morgan";
 import cors from "cors";
 import { z } from "zod";
 import {
@@ -29,46 +30,17 @@ export function createApp(options: {
 
   app.disable("x-powered-by");
 
+  // Colorized HTTP request logging (Morgan dev format):
+  // Example: POST /api/workspaces/personal/computers 201 45.123 ms - 342
+  app.use(morgan("dev", {
+    skip: (req) => req.path === "/health",
+  }));
+
+  // Attach a request ID for downstream application logging correlation.
   app.use((req, res, next) => {
     const requestId = randomUUID();
-    const started = performance.now();
-    const path = req.path;
-
     res.locals.requestId = requestId;
     res.setHeader("X-Request-ID", requestId);
-    log("info", "request.started", { requestId, method: req.method, path });
-
-    let completed = false;
-
-    res.on("finish", () => {
-      completed = true;
-      log(
-        res.statusCode >= 500
-          ? "error"
-          : res.statusCode >= 400
-            ? "warn"
-            : "info",
-        "request.finished",
-        {
-          requestId,
-          method: req.method,
-          path,
-          status: res.statusCode,
-          durationMs: Math.round(performance.now() - started),
-        },
-      );
-    });
-
-    res.on("close", () => {
-      if (!completed)
-        log("warn", "request.disconnected", {
-          requestId,
-          method: req.method,
-          path,
-          durationMs: Math.round(performance.now() - started),
-        });
-    });
-
     withRequestId(requestId, next);
   });
   const origins = new Set([

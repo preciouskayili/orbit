@@ -2,7 +2,7 @@ import { apiConnection } from "./api-connection";
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 const model = z.object({ id: z.string(), name: z.string(), provider: z.enum(['openai','anthropic']) });
-export const catalogSchema = z.object({ computerConfigured: z.boolean().default(false), models: z.array(model), defaultModel: z.string(), providers: z.array(z.object({ id: z.enum(['openai','anthropic']), configured: z.boolean(), error: z.string().optional() })), servers: z.array(z.object({ id: z.string(), name: z.string(), url: z.string(), enabled: z.boolean(), hasToken: z.boolean() })).default([]) });
+export const catalogSchema = z.object({ computerConfigured: z.boolean().default(false), models: z.array(model), defaultModel: z.string(), providers: z.array(z.object({ id: z.enum(['openai','anthropic']), configured: z.boolean(), source: z.enum(['custom', 'default', 'none']).optional(), hasDefault: z.boolean().default(false), error: z.string().optional() })), servers: z.array(z.object({ id: z.string(), name: z.string(), url: z.string(), enabled: z.boolean(), hasToken: z.boolean() })).default([]) });
 export type Catalog = z.infer<typeof catalogSchema>;
 export async function integrationRequest(workspace: string, path = '', method = 'GET', body?: unknown) {
   const token = apiConnection().token;

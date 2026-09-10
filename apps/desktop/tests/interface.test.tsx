@@ -33,10 +33,10 @@ function Location() {
 test("skills profiles save reusable instructions", async () => {
   const { SkillsPage } = await import("../src/pages/skills-page");
   render(<MemoryRouter><SkillsPage /></MemoryRouter>);
-  fireEvent.click(screen.getByRole("button", { name: "New profile" }));
+  fireEvent.click(screen.getByRole("button", { name: "New instructions" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "Careful reviewer" } });
   fireEvent.change(screen.getByRole("textbox", { name: "Instructions" }), { target: { value: "Ask before modifying production files." } });
-  fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save instructions" }));
   await waitFor(() => expect(getOrbitState().agents.some((a) => a.name === "Careful reviewer" && a.instructions === "Ask before modifying production files.")).toBe(true));
 });
 

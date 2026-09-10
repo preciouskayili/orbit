@@ -19,7 +19,8 @@ export function integrationRoutes(store: IntegrationStore, models: ModelRegistry
   router.post('/providers/:provider', async (req, res) => {
     const provider = z.enum(['openai','anthropic']).parse(req.params.provider);
     const { key } = z.object({ key: z.string().trim().max(8000) }).parse(req.body);
-    store.data.providers[provider] = key;
+    if (key) store.data.providers[provider] = key;
+    else delete store.data.providers[provider];
     store.save();
     models.setKey(provider, key);
     res.json(await models.refresh());

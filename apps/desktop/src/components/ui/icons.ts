@@ -64,3 +64,5 @@ export { X } from "@phosphor-icons/react/X";
 export { SquarePen } from "lucide-react";
 
 export { DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
+
+export { SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";

@@ -19,7 +19,7 @@ function DialogContent({
       <DialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <DialogPrimitive.Popup
           className={cn(
-            "relative w-full max-w-sm rounded-2xl bg-[#242424] text-zinc-100 shadow-[0_28px_90px_rgba(0,0,0,.55)] outline-none",
+            "relative w-full max-w-lg rounded-3xl bg-[#242424] text-zinc-100 shadow-[0_28px_90px_rgba(0,0,0,.55)] outline-none",
             className,
           )}
           {...props}

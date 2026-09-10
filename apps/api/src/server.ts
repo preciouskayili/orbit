@@ -45,7 +45,7 @@ const service = new Proxy({} as DaytonaComputers, { get(_target, prop) {
   const value = Reflect.get(configuredService, prop);
   return typeof value === 'function' ? value.bind(configuredService) : value;
 } });
-const models = new ModelRegistry({ openai: integrations.data.providers.openai ?? process.env.OPENAI_API_KEY, anthropic: integrations.data.providers.anthropic ?? process.env.ANTHROPIC_API_KEY }, process.env.OPENAI_MODEL);
+const models = new ModelRegistry({ ...integrations.data.providers }, process.env.OPENAI_MODEL, { openai: process.env.OPENAI_API_KEY, anthropic: process.env.ANTHROPIC_API_KEY });
 await models.refresh();
 const agents = new AgentRuns(models, service, 32, new RunJournal(resolve(directory, 'runs')), integrations);
 const computerConfig = { configured: () => Boolean(configuredService), configure: async (key: string) => {

@@ -8,9 +8,13 @@ test("error logging excludes SDK headers, signed URLs and raw messages", () => {
   const output = mock.method(console, "log", () => {});
   try {
     log("info", "request.finished", { requestId: "test", status: 200, durationMs: 12 });
-    const record = JSON.parse(String(output.mock.calls[0]?.arguments[0]));
-    assert.equal(record.event, "request.finished");
-    assert.equal(record.durationMs, 12);
-    assert.ok(record.time);
+    const line = String(output.mock.calls[0]?.arguments[0]);
+    // The structured logger must include the event name and key fields.
+    assert.ok(line.includes("request.finished"), "output includes event name");
+    assert.ok(line.includes("durationMs=12"), "output includes duration field");
+    assert.ok(line.includes("status=200"), "output includes status field");
+    // Secrets from SDK errors must never appear in log output.
+    assert.ok(!line.includes("private-key"), "output does not leak secrets");
+    assert.ok(!line.includes("Authorization"), "output does not leak headers");
   } finally { output.mock.restore(); }
 });

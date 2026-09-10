@@ -69,11 +69,12 @@ export class ModelRegistry {
   private revision = 0;
   private available: ModelOption[] = [];
   private errors: Partial<Record<Provider, string>> = {};
-  constructor(private keys: Partial<Record<Provider, string>>, private preferred?: string) {}
+  constructor(private keys: Partial<Record<Provider, string>>, private preferred?: string, private defaults: Partial<Record<Provider, string>> = {}) {}
+  private effectiveKeys() { return { openai: this.keys.openai || this.defaults.openai, anthropic: this.keys.anthropic || this.defaults.anthropic }; }
   setKey(provider: Provider, key: string) { this.revision++; this.keys[provider] = key; this.available = this.available.filter(m => m.provider !== provider); }
   async refresh() {
     const revision = ++this.revision;
-    const keys = { ...this.keys };
+    const keys = this.effectiveKeys();
     const available: ModelOption[] = [];
     const errors: Partial<Record<Provider, string>> = {};
     await Promise.all((['openai', 'anthropic'] as const).map(async provider => {
@@ -88,17 +89,23 @@ export class ModelRegistry {
           for await (const m of client.models.list()) models.push({ id: m.id, name: m.display_name, provider });
         }
         available.push(...models);
-      } catch { errors[provider] = 'Could not load models. Check this provider’s API key and connection.'; }
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        errors[provider] = status === 401 || status === 403
+          ? 'The provider rejected this key or its permissions. Check provider settings.'
+          : status === 429 ? 'The provider is rate limiting requests. Wait briefly and refresh models.'
+          : 'Could not reach the model provider. Check your connection and refresh models.';
+      }
     }));
     if (revision !== this.revision) return this.catalog();
     this.available = available; this.errors = errors;
     this.available.sort((a,b) => a.id.localeCompare(b.id));
     return this.catalog();
   }
-  catalog() { return { models: this.available, defaultModel: this.available.find(m => m.id === this.preferred)?.id ?? this.available.find(m => m.id === 'gpt-6-astra')?.id ?? this.available[0]?.id ?? '', providers: (['openai','anthropic'] as const).map(id => ({ id, configured: Boolean(this.keys[id]), error: this.errors[id] })) }; }
+  catalog() { return { models: this.available, defaultModel: this.available.find(m => m.id === this.preferred)?.id ?? this.available.find(m => m.id === 'gpt-6-astra')?.id ?? this.available[0]?.id ?? '', providers: (['openai','anthropic'] as const).map(id => ({ id, configured: Boolean(this.effectiveKeys()[id]), source: this.keys[id] ? 'custom' : this.defaults[id] ? 'default' : 'none', hasDefault: Boolean(this.defaults[id]), error: this.errors[id] })) }; }
   resolve(id?: string): { model: AgentModel; id: string } {
     const selected = this.available.find(m => m.id === (id || this.catalog().defaultModel));
     if (!selected) throw new ComputerError(400, 'Choose an available model in conversation settings. Refresh providers if needed.');
-    return { id: selected.id, model: selected.provider === 'openai' ? new OpenAIAgentModel(this.keys.openai!, selected.id) : new AnthropicAgentModel(this.keys.anthropic!, selected.id) };
+    return { id: selected.id, model: selected.provider === 'openai' ? new OpenAIAgentModel(this.effectiveKeys().openai!, selected.id) : new AnthropicAgentModel(this.effectiveKeys().anthropic!, selected.id) };
   }
 }

@@ -20,7 +20,7 @@ import {
   Monitor,
   Plus,
   SquarePen,
-  Sparkle,
+  SlidersHorizontal,
 } from "@/components/ui/icons";
 import {
   DropdownMenu,
@@ -45,7 +45,7 @@ import { orbitActions } from "@/lib/orbit-store";
 const navigation = [
   { label: "New conversation", path: "/new", icon: SquarePen },
   { label: "Computers", path: "/computers", icon: Monitor },
-  { label: "Skills", path: "/skills", icon: Sparkle },
+  { label: "Skills", path: "/skills", icon: SlidersHorizontal },
 ];
 export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const state = useOrbit();
@@ -64,7 +64,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const tasks = state.tasks.filter((t) =>
     projects.some((p) => p.id === t.projectId),
   );
-  const deletingProject = projects.find(p => p.id === deleteProjectId);
+  const deletingProject = projects.find((p) => p.id === deleteProjectId);
   const deletingTask = tasks.find((t) => t.id === deleteId);
   const requestDelete = (id: string) => {
     setDeleteError("");
@@ -195,7 +195,27 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                           <Icon className="size-3.5 shrink-0" />
                           <span className="truncate">{project.name}</span>
                         </button>
-                        <DropdownMenu><DropdownMenuTrigger aria-label={"Folder actions for " + project.name} className="rounded-md p-1 text-zinc-500 hover:bg-white/5"><DotsThree className="size-4" /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuGroup><DropdownMenuItem className="text-rose-300" onClick={() => { setDeleteError(''); setDeleteProjectId(project.id); }}>Delete folder</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent></DropdownMenu>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            aria-label={"Folder actions for " + project.name}
+                            className="rounded-md p-1 text-zinc-500 hover:bg-white/5"
+                          >
+                            <DotsThree className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuGroup>
+                              <DropdownMenuItem
+                                className="text-rose-300"
+                                onClick={() => {
+                                  setDeleteError("");
+                                  setDeleteProjectId(project.id);
+                                }}
+                              >
+                                Delete folder
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                         <button
                           aria-label={"New session in " + project.name}
                           title="New session"
@@ -303,22 +323,29 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
               <DropdownMenuContent side="top" className="w-64">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-                  {state.workspaces.filter(w => !cloudComputersEnabled || w.id === state.workspaceId || w.id === "personal").map((w) => (
-                    <DropdownMenuItem
-                      key={w.id}
-                      onClick={() => {
-                        orbitActions.switchWorkspace(w.id);
-                        navigate("/computers");
-                      }}
-                    >
-                      {w.id === state.workspaceId ? (
-                        <Check className="size-4 text-emerald-300" />
-                      ) : (
-                        <Buildings className="size-4" />
-                      )}
-                      {w.name}
-                    </DropdownMenuItem>
-                  ))}
+                  {state.workspaces
+                    .filter(
+                      (w) =>
+                        !cloudComputersEnabled ||
+                        w.id === state.workspaceId ||
+                        w.id === "personal",
+                    )
+                    .map((w) => (
+                      <DropdownMenuItem
+                        key={w.id}
+                        onClick={() => {
+                          orbitActions.switchWorkspace(w.id);
+                          navigate("/computers");
+                        }}
+                      >
+                        {w.id === state.workspaceId ? (
+                          <Check className="size-4 text-emerald-300" />
+                        ) : (
+                          <Buildings className="size-4" />
+                        )}
+                        {w.name}
+                      </DropdownMenuItem>
+                    ))}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -417,7 +444,56 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={Boolean(deletingProject)} onOpenChange={open => { if (!open && !deleting) setDeleteProjectId(undefined); }}><DialogContent className="p-6"><DialogTitle>Delete folder?</DialogTitle><DialogDescription className="mt-2">Delete “{deletingProject?.name}” and its {tasks.filter(t => t.projectId === deleteProjectId).length} sessions? Active agents will stop. Computers and their files will stay available.</DialogDescription>{deleteError && <p role="alert" className="mt-3 text-xs text-rose-300">{deleteError}</p>}<div className="mt-5 flex justify-end gap-2"><Button variant="ghost" disabled={deleting} onClick={() => setDeleteProjectId(undefined)}>Cancel</Button><Button variant="destructive" disabled={deleting} onClick={async () => { if (!deletingProject) return; setDeleting(true); try { await orbitActions.deleteProject(deletingProject.id); filePreview.close(); navigate('/new', { replace: true }); setDeleteProjectId(undefined); } catch(e) { setDeleteError((e as Error).message); } finally { setDeleting(false); } }}>{deleting ? 'Deleting…' : 'Delete folder'}</Button></div></DialogContent></Dialog>
+      <Dialog
+        open={Boolean(deletingProject)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteProjectId(undefined);
+        }}
+      >
+        <DialogContent className="p-6">
+          <DialogTitle>Delete folder?</DialogTitle>
+          <DialogDescription className="mt-2">
+            Delete “{deletingProject?.name}” and its{" "}
+            {tasks.filter((t) => t.projectId === deleteProjectId).length}{" "}
+            sessions? Active agents will stop. Computers and their files will
+            stay available.
+          </DialogDescription>
+          {deleteError && (
+            <p role="alert" className="mt-3 text-xs text-rose-300">
+              {deleteError}
+            </p>
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => setDeleteProjectId(undefined)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={async () => {
+                if (!deletingProject) return;
+                setDeleting(true);
+                try {
+                  await orbitActions.deleteProject(deletingProject.id);
+                  filePreview.close();
+                  navigate("/new", { replace: true });
+                  setDeleteProjectId(undefined);
+                } catch (e) {
+                  setDeleteError((e as Error).message);
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete folder"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </>
   );

@@ -1,4 +1,4 @@
-import { useIntegrations } from "@/lib/integrations";
+import { integrationRequest, useIntegrations } from "@/lib/integrations";
 import { cloudComputersEnabled, liveAgentsEnabled } from "@/lib/computer-config";
 import { liveAgents, agentActive } from "@/lib/live-agents";
 import type { AgentControl } from "@orbit/shared";
@@ -13,6 +13,9 @@ import {
   Monitor,
   Plus,
   Robot,
+  Cpu,
+  CaretDown,
+  Check,
   SidebarSimple,
 } from "./ui/icons";
 import { Button } from "./ui/button";
@@ -601,7 +604,18 @@ export function AgentPanel({
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            {liveAgentsEnabled && <SelectControl label="Model" value={conversation?.model || chosenModel || integrations.data?.defaultModel || ''} options={integrations.data?.models.map(m => ({ value: m.id, label: m.name })) ?? []} disabled={activeRun || sending || !integrations.data?.models.length} onValueChange={model => { setChosenModel(model); if (conversation) act(() => orbitActions.setConversationModel(conversation.id, model)); }} className="max-w-44 !bg-transparent !px-1" />}
+            {liveAgentsEnabled && <DropdownMenu>
+              <DropdownMenuTrigger disabled={activeRun || sending} aria-label="Choose model" className="flex h-9 max-w-56 items-center gap-2 rounded-lg px-2 text-xs text-zinc-300 hover:bg-white/5 disabled:opacity-40">
+                <Cpu className="size-4 shrink-0" /><span className="truncate">{integrations.data?.models.find(m => m.id === (conversation?.model || chosenModel || integrations.data?.defaultModel))?.name || (integrations.isPending ? 'Loading models…' : 'Choose model')}</span><CaretDown className="size-3 shrink-0" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" className="w-72">
+                <DropdownMenuLabel>Model</DropdownMenuLabel>
+                {integrations.data?.models.map(m => <DropdownMenuItem key={m.id} onClick={() => { setChosenModel(m.id); if (conversation) act(() => orbitActions.setConversationModel(conversation.id, m.id)); }}><Cpu className="size-4" /><span className="flex-1">{m.name}</span>{m.id === (conversation?.model || chosenModel || integrations.data?.defaultModel) && <Check className="size-3" />}</DropdownMenuItem>)}
+                {!integrations.data?.models.length && <p className="px-2 py-3 text-xs leading-5 text-zinc-400">{integrations.isPending ? 'Loading available models…' : integrations.error?.message || integrations.data?.providers.find(p => p.error)?.error || 'No models available. Connect a provider in Settings.'}</p>}
+                <DropdownMenuItem onClick={() => { void act(async () => { await integrationRequest(state.workspaceId, '/refresh', 'POST'); await integrations.refetch(); }); }}>Refresh models</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings')}>Provider settings</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>}
             <span className="min-w-0 truncate text-[11px] text-zinc-500">
               {projects.find((p) => p.id === projectId)?.name ?? "No project"}
               {conversation?.computerAccess === "workspace" && (
@@ -663,7 +677,7 @@ export function AgentPanel({
                 className="w-full"
               />
             </Field>
-            <Field label="Instruction profile">
+            <Field label="Saved instructions">
               <SelectControl
                 label="Agent"
                 value={agentId}
