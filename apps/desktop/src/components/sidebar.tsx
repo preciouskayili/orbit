@@ -157,7 +157,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </nav>
           <div className="sidebar-scroll mt-6 min-h-0 flex-1 overflow-y-auto">
             <div className="sidebar-scroll-content pb-4">
-              <div className="flex h-8 items-center justify-between px-2.5">
+              <div className="flex h-8 items-center justify-between">
                 <h2 className="text-sm text-zinc-300">Projects</h2>
                 <CreateContainer kind="project" compact />
               </div>
