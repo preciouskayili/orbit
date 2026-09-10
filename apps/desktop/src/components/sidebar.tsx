@@ -98,7 +98,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           hidden={collapsed}
           className={collapsed ? "hidden" : "flex min-h-0 flex-1 flex-col"}
         >
-          <div className="flex h-11 shrink-0 items-center px-5">
+          <div className="flex h-11 shrink-0 items-center px-5 pr-3">
             <Link
               to="/new"
               onClick={() => orbitActions.newConversation()}
@@ -129,7 +129,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </div>
           <nav
             aria-label="Main navigation"
-            className="mt-2 shrink-0 space-y-0.5 px-4"
+            className="mt-2 shrink-0 space-y-0.5 px-5"
           >
             {navigation.map((item) => (
               <Link

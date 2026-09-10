@@ -609,9 +609,11 @@ export function AgentPanel({
                 <Cpu className="size-4 shrink-0" /><span className="truncate">{integrations.data?.models.find(m => m.id === (conversation?.model || chosenModel || integrations.data?.defaultModel))?.name || (integrations.isPending ? 'Loading models…' : 'Choose model')}</span><CaretDown className="size-3 shrink-0" />
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-72">
+                <DropdownMenuGroup>
                 <DropdownMenuLabel>Model</DropdownMenuLabel>
                 {integrations.data?.models.map(m => <DropdownMenuItem key={m.id} onClick={() => { setChosenModel(m.id); if (conversation) act(() => orbitActions.setConversationModel(conversation.id, m.id)); }}><Cpu className="size-4" /><span className="flex-1">{m.name}</span>{m.id === (conversation?.model || chosenModel || integrations.data?.defaultModel) && <Check className="size-3" />}</DropdownMenuItem>)}
                 {!integrations.data?.models.length && <p className="px-2 py-3 text-xs leading-5 text-zinc-400">{integrations.isPending ? 'Loading available models…' : integrations.error?.message || integrations.data?.providers.find(p => p.error)?.error || 'No models available. Connect a provider in Settings.'}</p>}
+                </DropdownMenuGroup>
                 <DropdownMenuItem onClick={() => { void act(async () => { await integrationRequest(state.workspaceId, '/refresh', 'POST'); await integrations.refetch(); }); }}>Refresh models</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings')}>Provider settings</DropdownMenuItem>
               </DropdownMenuContent>
