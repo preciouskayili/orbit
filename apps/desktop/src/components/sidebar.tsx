@@ -62,7 +62,10 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
     projects.some((p) => p.id === t.projectId),
   );
   const deletingTask = tasks.find((t) => t.id === deleteId);
-  const requestDelete = (id: string) => { setDeleteError(""); setDeleteId(id); };
+  const requestDelete = (id: string) => {
+    setDeleteError("");
+    setDeleteId(id);
+  };
   const workspace = state.workspaces.find((w) => w.id === state.workspaceId)!;
   const reviews = tasks.filter((t) => t.status === "review");
   const initials = state.settings.name
@@ -140,7 +143,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                     ? item.path === "/new"
                       ? " text-zinc-100"
                       : " bg-white/[0.065] text-zinc-100"
-                    : " text-zinc-400")
+                    : " text-zinc-200")
                 }
               >
                 {item.icon === SquarePen ? (
@@ -155,7 +158,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           <div className="sidebar-scroll mt-6 min-h-0 flex-1 overflow-y-auto">
             <div className="sidebar-scroll-content pb-4">
               <div className="flex h-8 items-center justify-between px-2.5">
-                <h2 className="text-sm text-zinc-500">Projects</h2>
+                <h2 className="text-sm text-zinc-300">Projects</h2>
                 <CreateContainer kind="project" compact />
               </div>
               <div className="mt-1 space-y-1">
@@ -177,7 +180,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                               return next;
                             })
                           }
-                          className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-sm text-zinc-400 hover:text-zinc-200"
+                          className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-sm text-zinc-300 hover:text-zinc-200"
                         >
                           <CaretRight
                             className={
@@ -224,15 +227,22 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                           {tasks
                             .filter((t) => t.projectId === project.id)
                             .map((task) => (
-                              <SidebarSession key={task.id} task={task} indented
-                                selected={task.id === state.activeConversations[state.workspaceId]}
-                                onDelete={() => requestDelete(task.id)} />
+                              <SidebarSession
+                                key={task.id}
+                                task={task}
+                                indented
+                                selected={
+                                  task.id ===
+                                  state.activeConversations[state.workspaceId]
+                                }
+                                onDelete={() => requestDelete(task.id)}
+                              />
                             ))}
                           {projectComputers(state, project.id).map((m) => (
                             <Link
                               key={m.id}
                               to={"/computers/" + m.id}
-                              className={row + " !pl-10 text-zinc-400"}
+                              className={row + " !pl-10 text-zinc-300"}
                             >
                               <Monitor className="size-3.5 shrink-0 text-zinc-500" />
                               <span className="truncate">{m.name}</span>
@@ -249,16 +259,21 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
                   </p>
                 )}
               </div>
-              <h2 className="mt-7 px-2.5 py-2 text-sm text-zinc-500">
+              <h2 className="mt-7 px-2.5 py-2 text-sm text-zinc-400">
                 Recents
               </h2>
               {tasks.slice(0, 15).map((task) => (
-                <SidebarSession key={task.id} task={task}
-                  selected={task.id === state.activeConversations[state.workspaceId]}
-                  onDelete={() => requestDelete(task.id)} />
+                <SidebarSession
+                  key={task.id}
+                  task={task}
+                  selected={
+                    task.id === state.activeConversations[state.workspaceId]
+                  }
+                  onDelete={() => requestDelete(task.id)}
+                />
               ))}
               {!tasks.length && (
-                <p className="px-2.5 py-2 text-xs text-zinc-600">
+                <p className="px-2.5 py-2 text-xs text-zinc-400">
                   Your conversations will appear here.
                 </p>
               )}
@@ -342,29 +357,58 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           </DialogContent>
         </Dialog>
       </aside>
-      <Dialog open={Boolean(deletingTask)} onOpenChange={(open) => { if (!open && !deleting) setDeleteId(undefined); }}>
+      <Dialog
+        open={Boolean(deletingTask)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteId(undefined);
+        }}
+      >
         <DialogContent className="p-6">
           <DialogTitle>Delete session?</DialogTitle>
           <DialogDescription className="mt-2">
-            Delete “{deletingTask?.title}” and its messages? Its computers and their files will stay available.
+            Delete “{deletingTask?.title}” and its messages? Its computers and
+            their files will stay available.
           </DialogDescription>
-          {deleteError && <p role="alert" className="mt-3 text-xs text-rose-300">{deleteError}</p>}
+          {deleteError && (
+            <p role="alert" className="mt-3 text-xs text-rose-300">
+              {deleteError}
+            </p>
+          )}
           <div className="mt-5 flex justify-end gap-2">
-            <Button variant="ghost" disabled={deleting} onClick={() => setDeleteId(undefined)}>Cancel</Button>
-            <Button variant="destructive" disabled={deleting} onClick={async () => {
-              if (!deletingTask) return;
-              const id = deletingTask.id;
-              const currentRoute = /^\/(?:sessions|tasks)\/([^/]+)/.exec(location.pathname)?.[1] === id;
-              const active = state.activeConversations[state.workspaceId] === id;
-              setDeleting(true);
-              try {
-                await orbitActions.deleteConversation(id);
-                if (active || currentRoute) filePreview.close();
-                if (currentRoute) navigate("/new", { replace: true });
-                setDeleteId(undefined);
-              } catch (cause) { setDeleteError((cause as Error).message); }
-              finally { setDeleting(false); }
-            }}>{deleting ? "Deleting…" : "Delete session"}</Button>
+            <Button
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => setDeleteId(undefined)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={async () => {
+                if (!deletingTask) return;
+                const id = deletingTask.id;
+                const currentRoute =
+                  /^\/(?:sessions|tasks)\/([^/]+)/.exec(
+                    location.pathname,
+                  )?.[1] === id;
+                const active =
+                  state.activeConversations[state.workspaceId] === id;
+                setDeleting(true);
+                try {
+                  await orbitActions.deleteConversation(id);
+                  if (active || currentRoute) filePreview.close();
+                  if (currentRoute) navigate("/new", { replace: true });
+                  setDeleteId(undefined);
+                } catch (cause) {
+                  setDeleteError((cause as Error).message);
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete session"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

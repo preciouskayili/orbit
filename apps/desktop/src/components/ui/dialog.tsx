@@ -7,16 +7,36 @@ const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogClose = DialogPrimitive.Close;
 
-function DialogContent({ className, children, showCloseButton = true, ...props }: DialogPrimitive.Popup.Props & { showCloseButton?: boolean }) {
+function DialogContent({
+  className,
+  children,
+  showCloseButton = true,
+  ...props
+}: DialogPrimitive.Popup.Props & { showCloseButton?: boolean }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm" />
       <DialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <DialogPrimitive.Popup className={cn("relative w-full max-w-lg rounded-2xl bg-[#242424] text-zinc-100 shadow-[0_28px_90px_rgba(0,0,0,.55)] outline-none", className)} {...props}>
+        <DialogPrimitive.Popup
+          className={cn(
+            "relative w-full max-w-sm rounded-2xl bg-[#242424] text-zinc-100 shadow-[0_28px_90px_rgba(0,0,0,.55)] outline-none",
+            className,
+          )}
+          {...props}
+        >
           {children}
           {showCloseButton && (
-            <DialogPrimitive.Close render={<Button variant="ghost" size="icon-sm" className="absolute right-3 top-3 text-zinc-500" />}>
-              <X className="size-4" /><span className="sr-only">Close</span>
+            <DialogPrimitive.Close
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="absolute right-3 top-3 text-zinc-300"
+                />
+              }
+            >
+              <X className="size-4" />
+              <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
           )}
         </DialogPrimitive.Popup>
@@ -30,15 +50,45 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex items-center justify-end gap-2", className)} {...props} />;
+  return (
+    <div
+      className={cn("flex items-center justify-end gap-2", className)}
+      {...props}
+    />
+  );
 }
 
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
-  return <DialogPrimitive.Title className={cn("text-[15px] font-semibold tracking-[-0.01em] text-zinc-100", className)} {...props} />;
+  return (
+    <DialogPrimitive.Title
+      className={cn(
+        "text-[15px] font-semibold tracking-[-0.01em] text-zinc-100",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
-function DialogDescription({ className, ...props }: DialogPrimitive.Description.Props) {
-  return <DialogPrimitive.Description className={cn("text-[12px] leading-5 text-zinc-500", className)} {...props} />;
+function DialogDescription({
+  className,
+  ...props
+}: DialogPrimitive.Description.Props) {
+  return (
+    <DialogPrimitive.Description
+      className={cn("text-[12px] leading-5 text-zinc-300", className)}
+      {...props}
+    />
+  );
 }
 
-export { Dialog, DialogTrigger, DialogClose, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription };
+export {
+  Dialog,
+  DialogTrigger,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+};
