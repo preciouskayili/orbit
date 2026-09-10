@@ -120,6 +120,7 @@ export function AgentMessage({
       search: MagnifyingGlass,
       files: FileText,
       computer: Monitor,
+      mcp: Terminal,
     }[tool.name];
     const formattedInput = formatToolInput(tool.name, tool.input);
     return (

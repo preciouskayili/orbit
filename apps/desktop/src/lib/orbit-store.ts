@@ -1,3 +1,4 @@
+import { fallbackTitle } from "./session-titles";
 import { cloudComputersEnabled, liveAgentsEnabled } from "./computer-config";
 import { attachmentSchema, removeAttachments, type ChatAttachment } from "./chat-attachments";
 import { z } from "zod";
@@ -21,12 +22,15 @@ const agentSchema = z.object({
   name: z.string(),
   instructions: z.string(),
   skills: z.array(z.string()),
+  mcpServerIds: z.array(z.string()).optional(),
 });
 const taskSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   agentId: z.string(),
   title: z.string(),
+  titleSource: z.enum(["automatic", "generated", "manual"]).optional(),
+  model: z.string().optional(),
   prompt: z.string(),
   computerAccess: z.enum(["ask", "workspace"]).default("ask"),
   requests: z
@@ -51,7 +55,7 @@ const taskSchema = z.object({
       attachments: z.array(attachmentSchema).max(8).optional(),
       tool: z
         .object({
-          name: z.enum(["terminal", "search", "files", "computer"]),
+          name: z.enum(["terminal", "search", "files", "computer", "mcp"]),
           status: z.enum(["running", "completed", "failed"]).optional(),
           input: z.string(),
           output: z.string(),
@@ -105,14 +109,14 @@ function initialState(): OrbitState {
     version: 1,
     activeConversations: {},
     workspaceId: "personal",
-    workspaces: [
+    workspaces: cloudComputersEnabled ? [{ id: "personal", name: "Personal workspace" }] : [
       { id: "personal", name: "Personal workspace" },
       { id: "team", name: "Orbit team" },
     ],
-    projects: seed.projects.map((p) => ({ ...p, workspaceId: "personal" })),
-    machines: seed.machines.map((m) => ({ ...m, workspaceId: "personal" })),
-    activity: seed.activity,
-    messages: seed.messages,
+    projects: cloudComputersEnabled ? [{ id: "personal", workspaceId: "personal", name: "Personal", description: "", machineCount: 0, updatedAt: now() }] : seed.projects.map((p) => ({ ...p, workspaceId: "personal" })),
+    machines: cloudComputersEnabled ? [] : seed.machines.map((m) => ({ ...m, workspaceId: "personal" })),
+    activity: cloudComputersEnabled ? [] : seed.activity,
+    messages: cloudComputersEnabled ? [] : seed.messages,
     agents: [
       {
         id: "fleet-agent",
@@ -127,7 +131,7 @@ function initialState(): OrbitState {
     schedules: [],
     control: {},
     files: {},
-    settings: { name: "Precious Kayili", notifications: true },
+    settings: { name: cloudComputersEnabled ? "You" : "Precious Kayili", notifications: true },
   };
 }
 let persistenceError = "";
@@ -145,7 +149,12 @@ function restore(): OrbitState {
       return initialState();
     }
     const result = stateSchema.safeParse(decoded);
-    if (result.success) return { ...result.data, control: {} }; // Desktop input locks are transient.
+    if (result.success) {
+      for (const task of result.data.tasks) if (!task.titleSource && (task.title === task.prompt.slice(0,65) || task.title === 'New session')) {
+        task.title = fallbackTitle(task.messages); task.titleSource = 'automatic';
+      }
+      return { ...result.data, control: {} };
+    } // Desktop input locks are transient.
     persistenceError =
       "Saved prototype data could not be loaded. This session is using sample data.";
   } catch {
@@ -256,7 +265,7 @@ function startTask(
     projectId: input.projectId,
     agentId: input.agentId,
     prompt: input.prompt.trim(),
-    title: input.prompt.trim().slice(0, 65),
+    title: fallbackTitle([{ role: "user", content: input.prompt }]),
     machineIds: ids,
     computerAccess: "ask",
     requests: [],
@@ -680,6 +689,12 @@ export const orbitActions = {
   },
   async deleteConversation(conversationId: string) {
     const workspaceId = state.workspaceId;
+    const task = taskInWorkspace(state, conversationId);
+    if (task.liveRun && liveAgentsEnabled) {
+      const { liveAgents } = await import('./live-agents');
+      await liveAgents.deleteConversation(workspaceId, conversationId);
+    }
+    if (state.workspaceId !== workspaceId) throw new Error('Workspace changed; try again.');
     let attachments: ChatAttachment[] = [];
     update((d) => {
       const conversation = taskInWorkspace(d, conversationId);
@@ -691,6 +706,63 @@ export const orbitActions = {
     inputPausedRuns.delete(conversationId);
     try { await removeAttachments(workspaceId, attachments); }
     catch { persistenceError = "Session deleted, but its local attachments could not be removed."; }
+  },
+  async deleteProject(projectId: string) {
+    const workspace = state.workspaceId;
+    projectInWorkspace(state, projectId);
+    const tasks = state.tasks.filter(t => t.projectId === projectId);
+    if (liveAgentsEnabled) {
+      const { liveAgents } = await import('./live-agents');
+      for (const task of tasks) if (task.liveRun) await liveAgents.deleteConversation(workspace, task.id);
+    }
+    if (workspace !== state.workspaceId) throw new Error('Workspace changed; try again.');
+    let attachments: ChatAttachment[] = [];
+    update(d => {
+      projectInWorkspace(d, projectId);
+      const ids = new Set(tasks.map(t => t.id));
+      if (d.tasks.some(t => t.projectId === projectId && !ids.has(t.id))) throw new Error('A new session was added. Try deleting the folder again.');
+      d.tasks = d.tasks.filter(t => !ids.has(t.id));
+      d.projects = d.projects.filter(p => p.id !== projectId);
+      d.schedules = d.schedules.filter(s => s.projectId !== projectId);
+      d.activity = d.activity.filter(a => a.projectId !== projectId);
+      d.messages = d.messages.filter(m => m.projectId !== projectId);
+      if (ids.has(d.activeConversations[workspace] ?? '')) delete d.activeConversations[workspace];
+      d.machines.forEach(m => { if (m.projectId === projectId) { m.workspaceId ??= workspace; m.projectId = ''; } });
+      const retained = new Set(d.tasks.flatMap(t => t.messages.flatMap(m => (m.attachments ?? []).map(a => a.id))));
+      attachments = tasks.flatMap(t => t.messages.flatMap(m => m.attachments ?? [])).filter(a => !retained.has(a.id));
+    });
+    tasks.forEach(t => inputPausedRuns.delete(t.id));
+    try { await removeAttachments(workspace, attachments); } catch { persistenceError = 'Folder deleted, but some local attachments could not be removed.'; }
+  },
+  renameConversation(conversationId: string, title: string, source: 'manual' | 'generated' = 'manual', workspace = state.workspaceId) {
+    if (workspace !== state.workspaceId) return;
+    update(d => {
+      const task = taskInWorkspace(d, conversationId);
+      if (source === 'generated' && task.titleSource === 'manual') return;
+      if (!title.trim() || title.trim().length > 55) throw new Error('Use a title between 1 and 55 characters.');
+      task.title = title.trim(); task.titleSource = source;
+    });
+  },
+  setConversationModel(conversationId: string, model: string) {
+    update(d => {
+      const task = taskInWorkspace(d, conversationId);
+      if (task.liveRun && !['completed','failed','cancelled'].includes(task.liveRun.status)) throw new Error('Stop the current run before switching models.');
+      task.model = model;
+    });
+  },
+  deleteAgent(agentId: string) {
+    update(d => {
+      if (d.tasks.some(t => t.agentId === agentId)) throw new Error('This profile is used by a conversation. Change its profile before deleting it.');
+      d.agents = d.agents.filter(a => a.id !== agentId || a.workspaceId !== d.workspaceId);
+    });
+  },
+  setConversationAgent(conversationId: string, agentId: string) {
+    update(d => {
+      const task = taskInWorkspace(d, conversationId);
+      if (task.liveRun && !['completed','failed','cancelled'].includes(task.liveRun.status)) throw new Error('Stop the current run before switching profiles.');
+      if (!d.agents.some(a => a.id === agentId && a.workspaceId === d.workspaceId)) throw new Error('Choose a profile in this workspace.');
+      task.agentId = agentId;
+    });
   },
   newConversation() {
     update((d) => {
@@ -745,7 +817,7 @@ export const orbitActions = {
         id: conversationId,
         projectId,
         agentId,
-        title: prompt.trim().slice(0, 65),
+        title: fallbackTitle([{ role: "user", content: prompt }]),
         prompt: prompt.trim(),
         machineIds: [],
         computerAccess: "ask",
@@ -836,13 +908,14 @@ export const orbitActions = {
       if (!content.trim()) return;
       if (!task.prompt) {
         task.prompt = content.trim();
-        task.title = content.trim().slice(0, 65);
+
       }
       task.messages.push({
         role: "user",
         content: content.trim(),
         attachments,
       });
+      if (!task.titleSource || task.titleSource === "automatic") { task.title = fallbackTitle(task.messages); task.titleSource = "automatic"; }
       mentionedComputerIds.forEach((mid) => requestComputer(d, task, mid));
       if (
         !mentionedComputerIds.length &&

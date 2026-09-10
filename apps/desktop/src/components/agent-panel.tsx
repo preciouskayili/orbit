@@ -1,3 +1,4 @@
+import { useIntegrations } from "@/lib/integrations";
 import { cloudComputersEnabled, liveAgentsEnabled } from "@/lib/computer-config";
 import { liveAgents, agentActive } from "@/lib/live-agents";
 import type { AgentControl } from "@orbit/shared";
@@ -67,6 +68,8 @@ export function AgentPanel({
   const composer = useRef<HTMLTextAreaElement>(null);
   const state = useOrbit();
   const navigate = useNavigate();
+  const integrations = useIntegrations(state.workspaceId);
+  const [chosenModel, setChosenModel] = useState("");
   const projects = state.projects.filter(
     (p) => p.workspaceId === state.workspaceId,
   );
@@ -270,7 +273,10 @@ export function AgentPanel({
       setDraft("");
       setFiles([]);
       setError("");
-      if (liveAgentsEnabled && sessionId) await runAgent(sessionId);
+      if (liveAgentsEnabled && sessionId) {
+        if (!conversation?.model) orbitActions.setConversationModel(sessionId, chosenModel || integrations.data?.defaultModel || "");
+        await runAgent(sessionId);
+      }
     } catch (e) {
       if (!committed)
         await removeAttachments(workspaceId, saved).catch(() => {});
@@ -476,7 +482,9 @@ export function AgentPanel({
           </div>
         )}
         <ErrorNotice message={error} />
+        {liveAgentsEnabled && (integrations.isError || (integrations.data && !integrations.data.models.length)) && <button className="text-xs text-sky-300" onClick={() => navigate('/settings')}>Connect a model provider in Settings</button>}
         <ErrorNotice message={liveRun?.error ?? ""} />
+        {liveRun?.metrics && <details className="px-1 text-[11px] text-zinc-500"><summary className="cursor-pointer">Run details · {liveRun.model}</summary><p className="mt-2">{liveRun.metrics.modelCalls} model calls · {liveRun.metrics.toolCalls} tool calls · {Math.round(liveRun.metrics.modelMs / 1000)}s model time · {Math.round(liveRun.metrics.toolMs / 1000)}s tool time</p><p>{liveRun.metrics.inputTokens.toLocaleString()} input tokens · {liveRun.metrics.outputTokens.toLocaleString()} output tokens</p></details>}
         <form
           className="rounded-2xl bg-[#262626] p-3"
           onSubmit={(e) => {
@@ -535,10 +543,9 @@ export function AgentPanel({
                 <Plus className="size-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-64">
-                <DropdownMenuItem disabled={liveAgentsEnabled} onClick={() => fileInput.current?.click()}>
-                  <FileText className="size-4" />
-                  Attach files
-                </DropdownMenuItem>
+                {!liveAgentsEnabled && <DropdownMenuItem onClick={() => fileInput.current?.click()}>
+                  <FileText className="size-4" />Attach files
+                </DropdownMenuItem>}
                 <DropdownMenuItem
                   disabled={!projectId || !agentId || ended || activeRun}
                   onClick={() => setCreateOpen(true)}
@@ -594,6 +601,7 @@ export function AgentPanel({
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            {liveAgentsEnabled && <SelectControl label="Model" value={conversation?.model || chosenModel || integrations.data?.defaultModel || ''} options={integrations.data?.models.map(m => ({ value: m.id, label: m.name })) ?? []} disabled={activeRun || sending || !integrations.data?.models.length} onValueChange={model => { setChosenModel(model); if (conversation) act(() => orbitActions.setConversationModel(conversation.id, model)); }} className="max-w-44 !bg-transparent !px-1" />}
             <span className="min-w-0 truncate text-[11px] text-zinc-500">
               {projects.find((p) => p.id === projectId)?.name ?? "No project"}
               {conversation?.computerAccess === "workspace" && (
@@ -629,7 +637,7 @@ export function AgentPanel({
           </div>
         </form>
         <p className="text-center text-[10px] text-zinc-600">
-          {liveAgentsEnabled ? "OpenAI · uses attached computers · files stay on the computer" : cloudComputersEnabled ? "Live computers · agent not connected yet" : "Local preview · cloud execution not connected"}
+          {liveAgentsEnabled ? (liveRun?.model || conversation?.model || chosenModel || integrations.data?.defaultModel || "Connect a model in Settings") + " · uses attached computers" : cloudComputersEnabled ? "Live computers · agent not connected yet" : "Local preview · cloud execution not connected"}
         </p>
       </div>
       <CreateMachineDialog
@@ -659,9 +667,9 @@ export function AgentPanel({
               <SelectControl
                 label="Agent"
                 value={agentId}
-                onValueChange={setChosenAgent}
+                onValueChange={id => { setChosenAgent(id); if (conversation) act(() => orbitActions.setConversationAgent(conversation.id, id)); }}
                 options={agents.map((a) => ({ value: a.id, label: a.name }))}
-                disabled={Boolean(conversation)}
+                disabled={activeRun}
                 className="w-full"
               />
             </Field>

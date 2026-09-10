@@ -1,3 +1,5 @@
+import { cloudComputersEnabled } from "@/lib/computer-config";
+import { IntegrationSettings } from "@/components/integration-settings";
 import { useState } from "react";
 import { useOrbit } from "@/hooks/use-orbit";
 import { orbitActions, getPersistenceError } from "@/lib/orbit-store";
@@ -17,8 +19,9 @@ export function SettingsPage() {
         <label className="flex items-center justify-between text-sm text-zinc-400">Show review notification dots<Checkbox checked={state.settings.notifications} onCheckedChange={checked => orbitActions.settings({ ...state.settings, notifications: checked })} /></label>
         <Button type="submit" disabled={!name.trim()}>Save profile</Button>{saved && <span role="status" className="ml-3 text-xs text-emerald-300">Saved</span>}
       </form>
-      <section><div className="mb-3 flex items-center justify-between"><h2 className="text-sm text-zinc-300">Workspaces</h2><CreateContainer kind="workspace" /></div><div className="space-y-2">{state.workspaces.map(w => <button key={w.id} onClick={() => { orbitActions.switchWorkspace(w.id); navigate("/projects"); }} className="flex w-full items-center justify-between rounded-xl bg-white/[0.035] p-4 text-left text-sm text-zinc-300">{w.name}<span className="text-xs text-zinc-500">{w.id === state.workspaceId ? "Current" : "Switch"}</span></button>)}</div></section>
-      <section className="rounded-xl bg-white/[0.025] p-5"><h2 className="text-sm text-zinc-300">About this prototype</h2><p className="mt-2 text-sm leading-6 text-zinc-500">Your projects, computers, runs, and files are saved on this device. Cloud provisioning, real agent execution, authentication, and scheduled background runs will be connected in the backend phase.</p></section>
+      <section><div className="mb-3 flex items-center justify-between"><h2 className="text-sm text-zinc-300">Workspaces</h2>{!cloudComputersEnabled && <CreateContainer kind="workspace" />}</div><div className="space-y-2">{state.workspaces.filter(w => !cloudComputersEnabled || w.id === state.workspaceId).map(w => <button key={w.id} onClick={() => { orbitActions.switchWorkspace(w.id); navigate("/projects"); }} className="flex w-full items-center justify-between rounded-xl bg-white/[0.035] p-4 text-left text-sm text-zinc-300">{w.name}<span className="text-xs text-zinc-500">{w.id === state.workspaceId ? "Current" : "Switch"}</span></button>)}</div></section>
+      <IntegrationSettings section="models" />
+      <p className="text-xs leading-5 text-zinc-500">Conversations and profiles are saved on this device. Agent run history and provider credentials are saved by your local API. Computers keep their files across stop and start.</p>
       <ErrorNotice message={getPersistenceError()} />
     </div>
   </Page>;

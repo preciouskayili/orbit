@@ -1,14 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
-import {
-  IPC_CHANNELS,
-  type NativeFeature,
-  type OrbitDesktopAPI,
-} from "@orbit/shared";
-
+import { contextBridge, ipcRenderer } from 'electron';
+import { IPC_CHANNELS, type OrbitDesktopAPI } from '@orbit/shared';
 const desktopAPI: OrbitDesktopAPI = {
   getRuntimeInfo: () => ipcRenderer.invoke(IPC_CHANNELS.runtimeInfo),
-  requestFeature: (feature: NativeFeature) =>
-    ipcRenderer.invoke(IPC_CHANNELS.featureRequest, feature),
+  getApiConnection: () => ipcRenderer.invoke(IPC_CHANNELS.apiConnection),
 };
-
-contextBridge.exposeInMainWorld("orbitDesktop", desktopAPI);
+contextBridge.exposeInMainWorld('orbitDesktop', desktopAPI);

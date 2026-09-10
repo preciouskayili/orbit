@@ -1,9 +1,10 @@
+import { apiConnection } from "./api-connection";
 import { MachineSchema, MachinesResponseSchema, DesktopSessionSchema, type CreateMachineInput } from "@orbit/shared";
 import { orbitActions, getOrbitState } from "./orbit-store";
 
-const base = (import.meta.env.VITE_API_URL || "http://127.0.0.1:4000").replace(/\/$/, "");
+const base = (apiConnection().url).replace(/\/$/, "");
 async function request(workspaceId: string, path = "", method = "GET", body?: unknown) {
-  const token = import.meta.env.VITE_ORBIT_API_TOKEN;
+  const token = apiConnection().token;
   if (!token) throw new Error("Set VITE_ORBIT_API_TOKEN to connect Orbit to its local API.");
   let response: Response;
   try {

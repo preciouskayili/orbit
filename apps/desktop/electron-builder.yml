@@ -1,0 +1,21 @@
+appId: com.orbit.desktop
+productName: Orbit
+directories:
+  app: out/app
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+  - resources/**
+  - package.json
+extraResources:
+  - from: out/api
+    to: api
+mac:
+  category: public.app-category.productivity
+  icon: resources/icons/orbit.icns
+  target: [dmg, zip]
+win:
+  target: [nsis]
+linux:
+  target: [AppImage]

@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { log, errorFields } from "../logger.js";
 import { Daytona, type Sandbox } from "@daytona/sdk";
 import { MachineSchema, type Machine, type CreateMachineInput } from "@orbit/shared";
@@ -25,6 +26,24 @@ export interface DaytonaOptions {
 // Daytona labels are the durable computer registry; a localStorage record never
 // grants ownership. Every lookup verifies this installation and workspace.
 export class DaytonaComputers implements ComputerService, AgentComputerTools {
+  private desktopStarts = new Map<string, Promise<void>>();
+  private async ensureDesktop(sandbox: Sandbox, beforeAction: () => Promise<void> = async () => {}) {
+    const pending = this.desktopStarts.get(sandbox.id);
+    if (pending) { await pending; await beforeAction(); return; }
+    const ready = (async () => {
+      if ((await sandbox.computerUse.getStatus()).status === 'active') return;
+      await beforeAction();
+      try { await sandbox.computerUse.start(); }
+      catch (error) {
+        // A provider timeout can arrive after the desktop has actually started.
+        // Re-observe readiness instead of asking the model to repeat startup.
+        if ((await sandbox.computerUse.getStatus()).status !== 'active') throw error;
+      }
+    })();
+    this.desktopStarts.set(sandbox.id, ready);
+    try { await ready; } finally { this.desktopStarts.delete(sandbox.id); }
+    await beforeAction();
+  }
   private locks = new Map<string, Promise<unknown>>();
   constructor(private client: Pick<Daytona, "list" | "get" | "create">, private options: DaytonaOptions) {}
   private labels() {
@@ -96,7 +115,8 @@ export class DaytonaComputers implements ComputerService, AgentComputerTools {
       }
       const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
       // Enforce the deadline inside the computer, even if the API disconnects.
-      const bounded = "timeout -k 2s 30s bash -lc " + quote(command) + " 2>&1 | head -c 16000";
+      const desktopEnvironment = 'if [ -z "${DISPLAY:-}" ]; then for orbit_display_socket in /tmp/.X11-unix/X*; do if [ -S "$orbit_display_socket" ]; then export DISPLAY=":${orbit_display_socket##*/X}"; break; fi; done; fi; ';
+      const bounded = "timeout -k 2s 30s bash -lc " + quote(desktopEnvironment + command) + " 2>&1 | head -c 16000";
       const result = await sandbox.process.executeCommand("bash -o pipefail -c " + quote(bounded), undefined, undefined, 40);
       return { text: `Exit code: ${result.exitCode}\n${result.result.slice(0, 16000)}` };
     }
@@ -113,9 +133,11 @@ export class DaytonaComputers implements ComputerService, AgentComputerTools {
       await sandbox.fs.uploadFile(Buffer.from(content), path, 20);
       return { text: `Wrote ${Buffer.byteLength(content)} bytes to ${path}.` };
     }
-    const { action } = toolSchemas.computer.parse(args);
+    const actions = name === "computer_batch" ? toolSchemas.computer_batch.parse(args).actions : [toolSchemas.computer.parse(args).action];
     const desktop = sandbox.computerUse;
-    if ((await desktop.getStatus()).status !== "active") await desktop.start();
+    await this.ensureDesktop(sandbox, beforeAction);
+    await beforeAction();
+    for (const action of actions) {
     await beforeAction();
     switch (action.type) {
       case "click": await desktop.mouse.click(action.x, action.y, action.button, action.double); break;
@@ -124,13 +146,18 @@ export class DaytonaComputers implements ComputerService, AgentComputerTools {
       case "scroll": await desktop.mouse.scroll(action.x, action.y, action.direction, action.amount); break;
       case "type": await desktop.keyboard.type(action.text); break;
       case "keypress": await desktop.keyboard.press(action.key, action.modifiers); break;
+      case "wait":
+        for (let waited = 0; waited < action.milliseconds; waited += 100) { await delay(Math.min(100, action.milliseconds - waited)); await beforeAction(); }
+        break;
       case "screenshot": break;
     }
+    }
+    if (actions.some(a => !["screenshot", "wait"].includes(a.type))) { await delay(300); await beforeAction(); }
     const screenshot = await desktop.screenshot.takeFullScreen();
     if (!screenshot.screenshot) throw new ComputerError(502, "The desktop returned no screenshot.");
     const raw = screenshot.screenshot.replace(/^data:image\/png;base64,/, "");
     if (raw.length > 12_000_000 || !/^[A-Za-z0-9+/=\s]+$/.test(raw)) throw new ComputerError(502, "Invalid desktop screenshot.");
-    return { text: `Computer ${parsed.machineId}: ${action.type} completed. Current screen attached.`, image: "data:image/png;base64," + raw };
+    return { text: `Computer ${parsed.machineId}: ${actions.map(a => a.type).join(", ")} completed. Current screen attached.`, image: "data:image/png;base64," + raw };
   }
   async create(input: CreateMachineInput, requestId: string) {
     return this.exclusive("create:" + requestId, "create", async () => {
@@ -215,7 +242,7 @@ export class DaytonaComputers implements ComputerService, AgentComputerTools {
     return this.exclusive(id, "desktop.connect", async () => {
       const sandbox = await this.owned(id);
       if (sandbox.state !== "started") throw new ComputerError(409, "Start this computer before connecting.");
-      if ((await sandbox.computerUse.getStatus()).status !== "active") await sandbox.computerUse.start();
+      await this.ensureDesktop(sandbox);
       const sessionSeconds = 15 * 60;
       const preview = await sandbox.getSignedPreviewUrl(this.options.vncPort, sessionSeconds);
       const url = new URL(preview.url);

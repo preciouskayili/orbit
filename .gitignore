@@ -9,3 +9,6 @@ coverage
 out
 release
 .data/
+
+test-results/
+playwright-report/

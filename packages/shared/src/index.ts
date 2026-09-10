@@ -76,17 +76,11 @@ export const AgentMessagesResponseSchema = z.array(AgentMessageSchema);
 
 export const IPC_CHANNELS = {
   runtimeInfo: "orbit:runtime:info",
-  featureRequest: "orbit:feature:request",
+  apiConnection: "orbit:api:connection",
 } as const;
-
-export type NativeFeature =
-  "clipboard" | "filesystem" | "notifications" | "window-controls";
-
 export interface OrbitDesktopAPI {
   getRuntimeInfo: () => Promise<{ platform: NodeJS.Platform; version: string }>;
-  requestFeature: (
-    feature: NativeFeature,
-  ) => Promise<{ available: false; message: string }>;
+  getApiConnection?: () => Promise<{ url: string; token: string } | undefined>;
 }
 
 export const CreateCloudComputerSchema = CreateMachineInputSchema.extend({

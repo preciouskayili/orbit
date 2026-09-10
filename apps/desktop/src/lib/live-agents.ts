@@ -1,13 +1,16 @@
+import { apiConnection } from "./api-connection";
+import { integrationRequest } from "./integrations";
+import { substantivePrompt } from "./session-titles";
 import { AgentRunSchema, StartAgentRunSchema, type AgentControl, type AgentRun } from "@orbit/shared";
 import { getOrbitState, orbitActions, type Task } from "./orbit-store";
 
-const base = (import.meta.env.VITE_API_URL || "http://127.0.0.1:4000").replace(/\/$/, "");
+const base = (apiConnection().url).replace(/\/$/, "");
 export const agentActive = (task?: Task) => Boolean(task?.liveRun && !["completed", "cancelled", "failed"].includes(task.liveRun.status));
 class AgentRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 async function request(workspaceId: string, path: string, body?: unknown): Promise<AgentRun> {
-  const token = import.meta.env.VITE_ORBIT_API_TOKEN;
+  const token = apiConnection().token;
   if (!token) throw new AgentRequestError("Set VITE_ORBIT_API_TOKEN to connect the agent to the local API.", 401);
   const response = await fetch(`${base}/api/workspaces/${encodeURIComponent(workspaceId)}/agent-runs${path}`, {
     method: body === undefined ? "GET" : "POST",
@@ -30,6 +33,20 @@ function enqueue<T>(id: string, operation: () => Promise<T>): Promise<T> {
   return next;
 }
 export const liveAgents = {
+  async deleteConversation(workspaceId: string, id: string) {
+    const response = await fetch(`${base}/api/workspaces/${encodeURIComponent(workspaceId)}/agent-runs/conversations/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + apiConnection().token }, signal: AbortSignal.timeout(50_000) });
+    if (!response.ok) throw new Error((await response.json()).message || 'Could not stop and delete this conversation.');
+  },
+  async title(conversationId: string) {
+    const state = getOrbitState();
+    const task = state.tasks.find(t => t.id === conversationId);
+    if (!task || task.titleSource === 'manual' || task.titleSource === 'generated' || !substantivePrompt(task.messages)) return;
+    const messages = task.messages.filter(m => m.role === 'user').slice(0,8).map(m => ({ role: m.role, content: m.content.slice(0,4000) }));
+    try {
+      const result = await integrationRequest(state.workspaceId, '/title', 'POST', { model: task.model, messages });
+      if (getOrbitState().tasks.some(t => t.id === conversationId) && result.title !== 'New session') orbitActions.renameConversation(conversationId, result.title, 'generated', state.workspaceId);
+    } catch { /* The concise local title remains usable if generation is unavailable. */ }
+  },
   async start(conversationId: string) {
     if (starting.has(conversationId)) return;
     const state = getOrbitState();
@@ -47,14 +64,16 @@ export const liveAgents = {
     })).slice(-120);
     let size = messages.reduce((total, m) => total + m.content.length, 0);
     while (size > 400_000 && messages.length > 1) size -= messages.shift()!.content.length;
-    const input = StartAgentRunSchema.parse({ requestId: crypto.randomUUID(), conversationId, instructions: agent.instructions, skills: agent.skills, machineIds: task.machineIds, messages });
+    const input = StartAgentRunSchema.parse({ requestId: crypto.randomUUID(), conversationId, instructions: agent.instructions, model: task.model, mcpServerIds: agent.mcpServerIds, skills: agent.skills, machineIds: task.machineIds, messages });
     const workspaceId = state.workspaceId;
     const initial: AgentRun = { id: input.requestId, conversationId, status: "running", messages: [] };
     orbitActions.beginAgentRun(workspaceId, initial);
     starting.add(conversationId);
+
     try {
       const result = await request(workspaceId, "", input);
       orbitActions.receiveAgentRun(workspaceId, result);
+      void liveAgents.title(conversationId);
     } catch (error) {
       if (error instanceof AgentRequestError) {
         orbitActions.receiveAgentRun(workspaceId, { ...initial, status: "failed", error: error.message });

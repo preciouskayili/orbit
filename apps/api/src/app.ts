@@ -1,3 +1,6 @@
+import type { IntegrationStore } from "./integrations/store.js";
+import type { ModelRegistry } from "./agents/models.js";
+import { integrationRoutes } from "./integrations/routes.js";
 import { log, errorFields, withRequestId } from "./logger.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import express from "express";
@@ -16,6 +19,9 @@ export function createApp(options: {
   agents?: AgentRuns;
   token?: string;
   workspaceId: string;
+  integrations?: IntegrationStore;
+  models?: ModelRegistry;
+  computerConfig?: { configured: () => boolean; configure: (key: string) => Promise<void> };
 }) {
   const app = express();
 
@@ -72,7 +78,7 @@ export function createApp(options: {
     cors({
       origin: (origin, callback) =>
         callback(null, !!origin && origins.has(origin)),
-      methods: ["GET", "POST", "PATCH"],
+      methods: ["GET", "POST", "PATCH", "DELETE"],
     }),
   );
   app.use(express.json({ limit: "1mb" }));
@@ -80,8 +86,8 @@ export function createApp(options: {
     res.json({
       status: "ok",
       service: "orbit-api",
-      computers: options.service ? "daytona" : "unconfigured",
-      agents: options.agents ? "openai" : "unconfigured",
+      computers: (options.computerConfig ? options.computerConfig.configured() : options.service) ? "daytona" : "unconfigured",
+      agents: options.agents ? "connected" : "unconfigured",
     }),
   );
 
@@ -101,17 +107,19 @@ export function createApp(options: {
         .status(401)
         .json({ message: "The local API token is missing or incorrect." });
     }
-    if (!options.service)
-      return res.status(503).json({
-        message:
-          "Set DAYTONA_API_KEY on the API server to connect real computers.",
-      });
+
     next();
   });
+
+  if (options.integrations && options.models) app.use('/api/workspaces/:workspaceId/integrations', (req, res, next) => {
+    if (req.params.workspaceId !== options.workspaceId) return res.status(403).json({ message: 'This backend is connected to a different workspace.' });
+    next();
+  }, integrationRoutes(options.integrations, options.models, options.computerConfig));
 
   const router = express.Router({ mergeParams: true });
 
   router.use((req, res, next) => {
+    if (!options.service) return res.status(503).json({ message: "Configure Daytona on the API server to use computers." });
     if (
       (req.params as { workspaceId?: string }).workspaceId !==
       options.workspaceId
@@ -179,6 +187,8 @@ export function createApp(options: {
     next();
   });
 
+  agents.delete("/conversations/:id", async (req, res) => { await options.agents!.deleteConversation(req.params.id); res.json({ deleted: true }); });
+
   agents.post("/", (req, res) => {
     const parsed = StartAgentRunSchema.safeParse(req.body);
     if (!parsed.success)
@@ -212,6 +222,7 @@ export function createApp(options: {
         requestId: res.locals.requestId,
         ...errorFields(error),
       });
+      if (error instanceof z.ZodError) return res.status(400).json({ message: "Invalid settings. Check the fields and try again." });
       if (error instanceof ComputerError)
         return res.status(error.status).json({ message: error.message });
       const status =

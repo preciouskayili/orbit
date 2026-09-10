@@ -261,3 +261,34 @@ test("session deletion rejects a session from another workspace", async () => {
   await expect(store.orbitActions.deleteConversation(conversationId)).rejects.toThrow("current workspace");
   expect(store.getOrbitState()).toBe(before);
 });
+
+test('greetings do not become titles, substantive follow-ups do, and manual titles persist', () => {
+  const a = store.orbitActions; const project = a.createProject('Titles', '');
+  const id = a.createConversation(project, 'fleet-agent', 'hi');
+  expect(store.getOrbitState().tasks.find(t => t.id === id)!.title).toBe('New session');
+  a.message(id, 'can you open vscode and help me configure a really long list of extensions');
+  const title = store.getOrbitState().tasks.find(t => t.id === id)!.title;
+  expect(title).toMatch(/^Open vscode/); expect(title.length).toBeLessThanOrEqual(55);
+  a.renameConversation(id, 'Editor setup'); a.message(id, 'Another task');
+  a.renameConversation(id, 'Generated title', 'generated');
+  expect(store.getOrbitState().tasks.find(t => t.id === id)!.title).toBe('Editor setup');
+});
+test('folder deletion removes its sessions and assignments while retaining computers and files', async () => {
+  const { projectId, conversationId } = setup(); const a = store.orbitActions;
+  const [mid] = a.createFleet(projectId, input); a.attachComputers(conversationId, [mid]);
+  const files = store.getOrbitState().files[mid]; const other = a.createProject('Other', '');
+  const retained = a.createConversation(other, 'fleet-agent', 'Keep this conversation');
+  await a.deleteProject(projectId);
+  expect(store.getOrbitState().projects.some(p => p.id === projectId)).toBe(false);
+  expect(store.getOrbitState().tasks.some(t => t.id === conversationId)).toBe(false);
+  expect(store.getOrbitState().tasks.some(t => t.id === retained)).toBe(true);
+  expect(store.getOrbitState().machines.some(m => m.id === mid && m.workspaceId === 'personal')).toBe(true);
+  expect(store.getOrbitState().files[mid]).toEqual(files);
+});
+test('a running conversation cannot change model or profile', () => {
+  const { conversationId } = setup(); const a = store.orbitActions;
+  a.setConversationModel(conversationId, 'gpt-6-astra');
+  a.beginAgentRun('personal', { id: crypto.randomUUID(), conversationId, status: 'running', messages: [] });
+  expect(() => a.setConversationModel(conversationId, 'claude-fable-5')).toThrow(/Stop/);
+  expect(() => a.setConversationAgent(conversationId, 'fleet-agent')).toThrow(/Stop/);
+});

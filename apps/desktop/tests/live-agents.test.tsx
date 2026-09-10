@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { AgentRun } from "@orbit/shared";
 vi.mock("../src/lib/computer-config", () => ({ cloudComputersEnabled: true, liveAgentsEnabled: true }));
+vi.mock("../src/lib/integrations", () => ({ useIntegrations: () => ({ data: { models: [], defaultModel: '', providers: [], servers: [] }, refetch: vi.fn() }), integrationRequest: vi.fn(async () => { throw new Error('Title service unavailable'); }) }));
 import { AgentPanel } from "../src/components/agent-panel";
 import { LiveAgentSync } from "../src/components/live-agent-sync";
 import { liveAgents } from "../src/lib/live-agents";

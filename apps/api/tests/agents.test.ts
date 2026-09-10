@@ -172,7 +172,7 @@ test("OpenAI SDK sends strict computer function tools and consumes streaming tex
   assert.equal(sent.store, false);
   assert.equal(sent.parallel_tool_calls, false);
   assert.deepEqual(sent.include, ["reasoning.encrypted_content"]);
-  assert.deepEqual(sent.tools.map((t: { name: string }) => t.name), ["computer", "request_confirmation"]);
+  assert.deepEqual(sent.tools.map((t: { name: string }) => t.name), ["computer", "computer_batch", "request_confirmation"]);
   for (const tool of sent.tools) { assert.equal(tool.strict, true); assert.equal(tool.parameters.additionalProperties, false); }
   const desktopTool = sent.tools.find((tool: { name: string }) => tool.name === "computer");
   assert.ok(desktopTool.parameters.properties.action.anyOf);
@@ -219,4 +219,25 @@ test("agents can operate on multiple computers within the same run, reserving al
   await until(() => done(f.service.get(next1)));
   const next2 = f.start(input({ machineIds: ["comp-2"] }));
   await until(() => done(f.service.get(next2)));
+});
+
+test('terminal changes invalidate the previous screen before another GUI action', async () => {
+  const f = fixture([call('computer', { machineId: 'mine', action: { type: 'screenshot' } }), call('terminal', { machineId: 'mine', command: 'code' }), call('computer', { machineId: 'mine', action: { type: 'type', text: 'stale' } }), answer()]);
+  const id = f.start(); await until(() => done(f.service.get(id)));
+  assert.deepEqual(f.calls, ['computer', 'terminal']);
+  assert.ok(f.service.get(id).messages.some(m => m.tool?.output.includes('fresh screenshot')));
+});
+test('repeated identical actions stop before a fourth dispatch and record metrics', async () => {
+  const f = fixture(Array.from({length: 5}, () => call('terminal', { machineId: 'mine', command: 'pwd' })));
+  const id = f.start(); await until(() => done(f.service.get(id)));
+  assert.equal(f.calls.length, 3); assert.equal(f.service.get(id).status, 'failed');
+  assert.equal(f.service.get(id).metrics?.toolCalls, 3);
+});
+test('deleting a conversation cancels and waits for an in-flight operation', async () => {
+  let release!: () => void; let entered = false;
+  const f = fixture([call('terminal', { machineId: 'mine', command: 'sleep 1' })], { async execute() { entered = true; await new Promise<void>(r => { release = r; }); return { text: 'done' }; } });
+  const value = input(); const id = f.start(value); await until(() => entered);
+  let deleted = false; const deletion = f.service.deleteConversation(value.conversationId).then(() => { deleted = true; });
+  await delay(50); assert.equal(deleted, false); assert.throws(() => f.start(), /another agent run/);
+  release(); await deletion; assert.throws(() => f.service.get(id), /no longer available/);
 });

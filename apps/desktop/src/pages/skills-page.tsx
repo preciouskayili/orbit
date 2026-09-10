@@ -1,3 +1,5 @@
+import { IntegrationSettings } from "@/components/integration-settings";
+import { useIntegrations } from "@/lib/integrations";
 import { useState, type FormEvent } from "react";
 import { useOrbit } from "@/hooks/use-orbit";
 import { orbitActions, type OrbitAgent } from "@/lib/orbit-store";
@@ -20,7 +22,7 @@ export const toolCatalog = [
   },
   {
     id: "browser",
-    name: "Browser",
+    name: "Desktop & browser",
     description:
       "Navigate sites and work with web applications on a cloud computer.",
   },
@@ -35,10 +37,11 @@ export function SkillsPage() {
   const [editing, setEditing] = useState<OrbitAgent | null | undefined>();
   return (
     <Page
-      title="Skills & instructions"
-      description="Give your agent instructions and choose the tools it can use. Save different profiles for different kinds of work."
+      title="Skills & tools"
+      description="Choose how your agent works. Manage instruction profiles, computer tools, and MCP connections."
       actions={<Button onClick={() => setEditing(null)}>New profile</Button>}
     >
+      <h2 className="mb-4 text-sm font-medium text-zinc-300">Instruction profiles</h2>
       <div className="fleet-grid">
         {state.agents
           .filter((a) => a.workspaceId === state.workspaceId)
@@ -68,13 +71,14 @@ export function SkillsPage() {
             </button>
           ))}
       </div>
+      <div className="mt-10 max-w-3xl"><IntegrationSettings section="mcp" /></div>
       <Dialog
         open={editing !== undefined}
         onOpenChange={(open) => {
           if (!open) setEditing(undefined);
         }}
       >
-        <DialogContent className="p-6">
+        <DialogContent className="max-h-[85vh] overflow-y-auto p-6">
           <DialogTitle>{editing ? "Edit profile" : "New profile"}</DialogTitle>
           <DialogDescription className="mt-2">
             Instructions and tools travel with the agent.
@@ -98,6 +102,9 @@ function ProfileEditor({
   agent: OrbitAgent | null;
   onSaved: () => void;
 }) {
+  const state = useOrbit();
+  const integrations = useIntegrations(state.workspaceId);
+  const [mcpServerIds, setMcpServerIds] = useState(agent?.mcpServerIds ?? []);
   const [name, setName] = useState(agent?.name ?? "");
   const [instructions, setInstructions] = useState(agent?.instructions ?? "");
   const [skills, setSkills] = useState(
@@ -107,7 +114,7 @@ function ProfileEditor({
   function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      orbitActions.saveAgent({ name, instructions, skills }, agent?.id);
+      orbitActions.saveAgent({ name, instructions, skills, mcpServerIds }, agent?.id);
       onSaved();
     } catch (e) {
       setError((e as Error).message);
@@ -153,8 +160,13 @@ function ProfileEditor({
           </label>
         ))}
       </fieldset>
+      <fieldset><legend className="mb-3 text-xs text-zinc-400">MCP servers</legend>
+        {integrations.data?.servers.filter(server => server.enabled || mcpServerIds.includes(server.id)).map(server => <label key={server.id} className="mb-2 flex items-center gap-3 rounded-lg bg-white/5 p-3 text-sm text-zinc-300"><Checkbox checked={mcpServerIds.includes(server.id)} onCheckedChange={checked => setMcpServerIds(ids => checked ? [...ids, server.id] : ids.filter(id => id !== server.id))} />{server.name}{!server.enabled && ' · disabled'}</label>)}
+        {mcpServerIds.filter(id => integrations.data && !integrations.data.servers.some(s => s.id === id)).map(id => <label key={id} className="flex items-center gap-2 text-xs text-amber-300"><Checkbox checked onCheckedChange={() => setMcpServerIds(ids => ids.filter(s => s !== id))} />Removed server · uncheck to detach</label>)}
+        {!integrations.data?.servers.length && <p className="text-xs text-zinc-500">Add a connection on the Skills & tools page to enable its tools here.</p>}
+      </fieldset>
       <ErrorNotice message={error} />
-      <Button type="submit">Save profile</Button>
+      <div className="flex gap-2"><Button type="submit">Save profile</Button>{agent && <Button type="button" variant="ghost" onClick={() => { try { orbitActions.deleteAgent(agent.id); onSaved(); } catch(e) { setError((e as Error).message); } }}>Delete profile</Button>}</div>
     </form>
   );
 }
