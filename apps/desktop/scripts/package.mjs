@@ -1,15 +1,13 @@
 import { build } from 'esbuild';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-const require = createRequire(import.meta.url);
+import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 const run = (args, options = {}) => { const result = spawnSync('pnpm', args, { stdio: 'inherit', ...options }); if (result.status !== 0) process.exit(result.status || 1); };
 run(['--filter','@orbit/shared','build']);
 run(['build'], { env: { ...process.env, VITE_ORBIT_API_TOKEN: '', VITE_API_URL: '', VITE_COMPUTER_PROVIDER: 'daytona', VITE_AGENT_PROVIDER: 'live' } });
 mkdirSync('out/api', { recursive: true });
 await build({ entryPoints: ['../api/src/server.ts'], outfile: 'out/api/server.cjs', bundle: true, platform: 'node', target: 'node22', format: 'cjs', external: ['fsevents', 'bufferutil', 'utf-8-validate'] });
 // A minimal staging app excludes the workspace dependencies and all .env files.
+rmSync('out/app', { recursive: true, force: true });
 mkdirSync('out/app', { recursive: true });
 const { cpSync } = await import('node:fs');
 for (const dir of ['dist','dist-electron','resources']) cpSync(dir, 'out/app/' + dir, { recursive: true });

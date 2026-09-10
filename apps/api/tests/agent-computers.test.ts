@@ -49,3 +49,12 @@ test("Daytona tools check ownership, running state, and cancellation before prov
   await assert.rejects(f.service.execute("terminal", args, async () => { throw new Error("cancelled"); }), /cancelled/);
   assert.equal(f.calls.length, 0);
 });
+
+test('terminal discovers X11 display and keyboard batches recheck handoff between inputs', async () => {
+  const f = fixture();
+  await f.service.execute('terminal', { machineId: 'mine', command: 'code' }, async () => {});
+  assert.match(String(f.calls[0]?.[1]), /orbit_display_socket/);
+  let gates = 0;
+  await assert.rejects(f.service.execute('computer_batch', { machineId: 'mine', actions: [{ type: 'type', text: 'first' }, { type: 'keypress', key: 'enter', modifiers: [] }] }, async () => { if (++gates === 5) throw new Error('human input'); }), /human input/);
+  assert.equal(f.calls.some(call => call[0] === 'press'), false);
+});

@@ -239,5 +239,6 @@ test('deleting a conversation cancels and waits for an in-flight operation', asy
   const value = input(); const id = f.start(value); await until(() => entered);
   let deleted = false; const deletion = f.service.deleteConversation(value.conversationId).then(() => { deleted = true; });
   await delay(50); assert.equal(deleted, false); assert.throws(() => f.start(), /another agent run/);
+  assert.throws(() => f.service.start(input({ conversationId: value.conversationId, machineIds: [] })), /being deleted/);
   release(); await deletion; assert.throws(() => f.service.get(id), /no longer available/);
 });

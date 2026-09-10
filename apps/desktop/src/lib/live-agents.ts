@@ -2,7 +2,7 @@ import { apiConnection } from "./api-connection";
 import { integrationRequest } from "./integrations";
 import { substantivePrompt } from "./session-titles";
 import { AgentRunSchema, StartAgentRunSchema, type AgentControl, type AgentRun } from "@orbit/shared";
-import { getOrbitState, orbitActions, type Task } from "./orbit-store";
+import { getOrbitState, orbitActions, isConversationDeleting, type Task } from "./orbit-store";
 
 const base = (apiConnection().url).replace(/\/$/, "");
 export const agentActive = (task?: Task) => Boolean(task?.liveRun && !["completed", "cancelled", "failed"].includes(task.liveRun.status));
@@ -48,6 +48,7 @@ export const liveAgents = {
     } catch { /* The concise local title remains usable if generation is unavailable. */ }
   },
   async start(conversationId: string) {
+    if (isConversationDeleting(conversationId)) throw new Error("This conversation is being deleted.");
     if (starting.has(conversationId)) return;
     const state = getOrbitState();
     const task = state.tasks.find((t) => t.id === conversationId && state.projects.some((p) => p.id === t.projectId && p.workspaceId === state.workspaceId));

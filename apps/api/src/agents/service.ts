@@ -63,11 +63,15 @@ Instruction profile (subordinate to the rules above):\n`;
 
 export class AgentRuns {
   private runs = new Map<string, RunState>();
+  private deleting = new Set<string>();
   private reservations = new Map<string, string>();
   constructor(private model: AgentModel | ModelRegistry, private computers: ComputerService & AgentComputerTools, private maxTurns = 32, private journal?: RunJournal, private integrations?: IntegrationStore) {}
   hasActiveRuns() { return [...this.runs.values()].some(r => !finished(r.view.status)); }
   private persist(run: RunState) { this.journal?.save(run.fingerprint, run.view); }
   async deleteConversation(id: string) {
+    if (this.deleting.has(id)) throw new ComputerError(409, "This conversation is already being deleted.");
+    this.deleting.add(id);
+    try {
     const runs = [...this.runs.values()].filter(r => r.input.conversationId === id);
     runs.forEach(r => { if (!finished(r.view.status)) r.controller.abort(); });
     const deadline = Date.now() + 45_000;
@@ -77,8 +81,10 @@ export class AgentRuns {
     }
     this.journal?.deleteConversation(id);
     runs.forEach(r => this.runs.delete(r.view.id));
+    } finally { this.deleting.delete(id); }
   }
   start(input: StartAgentRun): AgentRun {
+    if (this.deleting.has(input.conversationId)) throw new ComputerError(409, "This conversation is being deleted.");
     this.prune();
     const fingerprint = createHash("sha256").update(JSON.stringify(input)).digest("hex");
     const archived = this.journal?.get(input.requestId);
@@ -102,9 +108,9 @@ export class AgentRuns {
       // Wait for the renderer's first heartbeat before executing any tools.
       heartbeatAt: 0, humans: new Set(), observed: new Set(),
     };
+    this.persist(run);
     this.runs.set(input.requestId, run);
     input.machineIds.forEach((id) => this.reservations.set(id, input.requestId));
-    this.persist(run);
     void this.execute(run, selected?.model);
     return this.snapshot(run);
   }
@@ -218,6 +224,7 @@ export class AgentRuns {
           if (recentCalls.length > 8) recentCalls.shift();
           if (recentCalls.filter(c => c === signature).length >= 4) throw new ComputerError(422, "Stopped repeated actions without progress. Review the computer before continuing.");
           if (mcp.has(call.name)) {
+            if (!this.integrations?.data.servers.some(server => server.id === mcp.serverId(call.name) && server.enabled)) throw new ComputerError(403, "This MCP server was disabled or removed. Its tools can no longer be used by this run.");
             const message: LiveAgentMessage = { id: call.call_id, role: 'assistant', content: mcp.label(call.name), tool: { name: 'mcp', input: call.arguments, output: '', status: 'running' } };
             run.view.messages.push(message);
             this.persist(run);
@@ -302,11 +309,11 @@ export class AgentRuns {
     } finally {
       clearTimeout(deadline);
       delete run.view.approval;
-      run.finishedAt = Date.now();
       run.view.finishedAt = new Date().toISOString();
       await mcp.close();
       run.input.machineIds.forEach((id) => { if (this.reservations.get(id) === run.view.id) this.reservations.delete(id); });
       try { this.persist(run); } catch { log("error", "agent.persistence.failed", { runId: run.view.id }); }
+      run.finishedAt = Date.now();
       log("info", "agent.finished", { runId: run.view.id, status: run.view.status });
     }
   }

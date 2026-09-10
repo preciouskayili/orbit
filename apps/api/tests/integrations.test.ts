@@ -1,3 +1,6 @@
+import { AgentRuns, type AgentModel } from '../src/agents/service.js';
+import type { ComputerService } from '../src/computers/service.js';
+import type { AgentComputerTools } from '../src/agents/tools.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
@@ -61,9 +64,10 @@ test('Claude adapter streams text, carries tool calls, and returns usage', async
 test('MCP connects over HTTP, discovers tools and executes a real protocol call', async () => {
   const app = express(); app.use(express.json());
   const transports: StreamableHTTPServerTransport[] = [];
+  let toolCalls = 0;
   app.post('/mcp', async (req, res) => {
     const server = new McpServer({ name: 'test', version: '1' });
-    server.registerTool('echo', { inputSchema: { text: z.string() } }, async ({ text }) => ({ content: [{ type: 'text', text: 'echo:' + text }] }));
+    server.registerTool('echo', { inputSchema: { text: z.string() } }, async ({ text }) => { toolCalls++; return { content: [{ type: 'text', text: 'echo:' + text }] }; });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); transports.push(transport);
     await server.connect(transport); await transport.handleRequest(req, res, req.body);
     res.on('close', () => { void transport.close(); void server.close(); });
@@ -76,5 +80,23 @@ test('MCP connects over HTTP, discovers tools and executes a real protocol call'
     const result = await session.call(session.tools[0]!.name, { text: 'verified' }, AbortSignal.timeout(5000));
     assert.match(result.text, /echo:verified/); assert.equal(result.failed, false);
     await assert.rejects(session.call('unknown', {}, new AbortController().signal), /not attached/);
+    const dir = mkdtempSync(join(tmpdir(), 'orbit-mcp-run-'));
+    try {
+      const store = new IntegrationStore(dir);
+      store.data.servers = [{ id: randomUUID(), name: 'Echo', url: `http://127.0.0.1:${(http.address() as {port:number}).port}/mcp`, enabled: true }];
+      let turns = 0;
+      const model: AgentModel = { async respond(_input, _instructions, tools) {
+        if (++turns === 2) store.data.servers[0]!.enabled = false;
+        const name = tools.find(t => t.name.startsWith('mcp_'))!.name;
+        return { status: 'completed', output: [{ type: 'function_call', call_id: randomUUID(), name, arguments: JSON.stringify({ text: 'agent' }) }] };
+      } };
+      const runs = new AgentRuns(model, {} as ComputerService & AgentComputerTools, 4, undefined, store);
+      const run = runs.start({ requestId: randomUUID(), conversationId: 'mcp-test', instructions: '', skills: [], machineIds: [], mcpServerIds: [store.data.servers[0]!.id], messages: [{ role: 'user', content: 'Echo agent' }] });
+      runs.control(run.id, { action: 'heartbeat', humanMachineIds: [] });
+      for (let i = 0; i < 100 && runs.get(run.id).status !== 'failed'; i++) await new Promise(r => setTimeout(r, 20));
+      assert.equal(toolCalls, 2, 'one direct call and one agent call; no call after disabling');
+      assert.match(runs.get(run.id).error ?? '', /disabled or removed/);
+      assert.ok(runs.get(run.id).messages.some(m => m.tool?.name === 'mcp' && m.tool.output.includes('echo:agent')));
+    } finally { rmSync(dir, { recursive: true }); }
   } finally { await session.close(); await Promise.allSettled(transports.map(t => t.close())); await new Promise<void>(r => http.close(() => r())); }
 });

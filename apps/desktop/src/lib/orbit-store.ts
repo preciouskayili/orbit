@@ -420,6 +420,8 @@ function provision(
 // Ephemeral desktop-input leases are not persisted and never authorize a cloud
 // operation. The backend must enforce the same coordination per remote session.
 const inputLeases = new Map<string, { token: string }>();
+const deletingConversations = new Set<string>();
+export const isConversationDeleting = (id: string) => deletingConversations.has(id);
 const inputPausedRuns = new Set<string>();
 export const orbitActions = {
   beginAgentRun(workspaceId: string, run: AgentRun) {
@@ -672,10 +674,11 @@ export const orbitActions = {
   },
   saveAgent(input: Omit<OrbitAgent, "workspaceId" | "id">, agentId?: string) {
     update((d) => {
-      if (!input.name.trim()) throw new Error("Enter an agent name.");
+      input = z.object({ name: z.string().trim().min(1).max(60), instructions: z.string().max(16000), skills: z.array(z.enum(["terminal", "browser", "files"])).max(3), mcpServerIds: z.array(z.string().uuid()).max(20).optional() }).parse(input);
       const existing = d.agents.find(
         (a) => a.id === agentId && a.workspaceId === d.workspaceId,
       );
+      if (agentId && !existing) throw new Error("This profile no longer exists in this workspace.");
       if (existing) Object.assign(existing, input);
       else d.agents.push({ ...input, id: id(), workspaceId: d.workspaceId });
     });
@@ -690,6 +693,9 @@ export const orbitActions = {
   async deleteConversation(conversationId: string) {
     const workspaceId = state.workspaceId;
     const task = taskInWorkspace(state, conversationId);
+    if (deletingConversations.has(conversationId)) throw new Error("This conversation is being deleted.");
+    deletingConversations.add(conversationId);
+    try {
     if (task.liveRun && liveAgentsEnabled) {
       const { liveAgents } = await import('./live-agents');
       await liveAgents.deleteConversation(workspaceId, conversationId);
@@ -706,11 +712,15 @@ export const orbitActions = {
     inputPausedRuns.delete(conversationId);
     try { await removeAttachments(workspaceId, attachments); }
     catch { persistenceError = "Session deleted, but its local attachments could not be removed."; }
+    } finally { deletingConversations.delete(conversationId); }
   },
   async deleteProject(projectId: string) {
     const workspace = state.workspaceId;
     projectInWorkspace(state, projectId);
     const tasks = state.tasks.filter(t => t.projectId === projectId);
+    if (tasks.some(t => deletingConversations.has(t.id))) throw new Error("A session in this folder is already being deleted.");
+    tasks.forEach(t => deletingConversations.add(t.id));
+    try {
     if (liveAgentsEnabled) {
       const { liveAgents } = await import('./live-agents');
       for (const task of tasks) if (task.liveRun) await liveAgents.deleteConversation(workspace, task.id);
@@ -733,6 +743,7 @@ export const orbitActions = {
     });
     tasks.forEach(t => inputPausedRuns.delete(t.id));
     try { await removeAttachments(workspace, attachments); } catch { persistenceError = 'Folder deleted, but some local attachments could not be removed.'; }
+    } finally { tasks.forEach(t => deletingConversations.delete(t.id)); }
   },
   renameConversation(conversationId: string, title: string, source: 'manual' | 'generated' = 'manual', workspace = state.workspaceId) {
     if (workspace !== state.workspaceId) return;
@@ -905,6 +916,7 @@ export const orbitActions = {
   ) {
     update((d) => {
       const task = taskInWorkspace(d, taskId);
+      if (deletingConversations.has(taskId)) throw new Error("This conversation is being deleted.");
       if (!content.trim()) return;
       if (!task.prompt) {
         task.prompt = content.trim();

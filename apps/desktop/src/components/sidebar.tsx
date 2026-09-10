@@ -303,7 +303,7 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
               <DropdownMenuContent side="top" className="w-64">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-                  {state.workspaces.filter(w => !cloudComputersEnabled || w.id === state.workspaceId).map((w) => (
+                  {state.workspaces.filter(w => !cloudComputersEnabled || w.id === state.workspaceId || w.id === "personal").map((w) => (
                     <DropdownMenuItem
                       key={w.id}
                       onClick={() => {

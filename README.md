@@ -2,7 +2,7 @@
 
 Computers for agents. Work with your agent in a persistent conversation, give it a fleet of computers, watch their desktops, and work directly alongside them.
 
-Orbit includes a **local demo** and **real OpenAI agents on Daytona computers**. In Daytona mode, agents stream replies and use terminal, text-file, and desktop tools on computers attached to their conversation. Demo mode runs locally with simulated responses and desktops.
+Orbit includes a **local demo** and **real OpenAI and Claude agents on Daytona computers**. In Daytona mode, agents stream replies and use terminal, text-file, and desktop tools on computers attached to their conversation. Demo mode runs locally with simulated responses and desktops.
 
 ## Run
 
@@ -55,18 +55,18 @@ The live test records its retry ID in `/tmp/orbit-daytona-smoke-request.json`. I
 
 Provider references: [Computer Use](https://www.daytona.io/docs/en/computer-use/), [Persistence](https://www.daytona.io/docs/en/persistence/), [SDK](https://www.daytona.io/docs/en/typescript-sdk/daytona/).
 
-## OpenAI agents
+## Multi-model agents
 
-1. Add `OPENAI_API_KEY` to `apps/api/.env`. Keep it on the API server alongside the Daytona key. `OPENAI_MODEL` defaults to `gpt-5.6-sol`; choose a model with function calling and image-input support if changing it.
+1. Add `OPENAI_API_KEY` to `apps/api/.env`. Keep it on the API server alongside the Daytona key. `OPENAI_MODEL` can select your preferred model. Otherwise Orbit prefers `gpt-6-astra` when the account exposes it. Settings also accepts an Anthropic API key and discovers available Claude models, including Fable when accessible.
 2. Restart the API. OpenAI agents are enabled automatically with `VITE_COMPUTER_PROVIDER=daytona`. Set `VITE_AGENT_PROVIDER=demo` to keep real agents disabled.
 3. Send a chat message. For computer work, attach a running computer through **+**, or mention it and allow access. The selected instruction profile controls which tools are offered. No computer is required for ordinary chat.
 4. Follow the streamed reply and expandable tool results. **Pause / Resume** controls subsequent calls; **Stop** ends the current agent turn and leaves the conversation available. Send a follow-up after it finishes. Action confirmations appear inline with **Allow action / Deny action**. The model requests these confirmations based on its instructions; Orbit does not classify every arbitrary shell command or GUI action for consequential effects.
 
-The backend uses the OpenAI Responses API with function tools for terminal, text-file reading/writing, desktop screenshots and input, and action confirmation. Each tool names its target computer. The backend verifies installation/workspace ownership, restricts calls to the run's attached computers and selected tools, and reserves those computers against concurrent runs. Tool profiles control exposed APIs; they are not an OS permission sandbox (a terminal or desktop can access files too).
+The backend uses OpenAI Responses or Anthropic Messages with function tools for terminal, text-file reading/writing, desktop screenshots and input, and action confirmation. Each tool names its target computer. The backend verifies installation/workspace ownership, restricts calls to the run's attached computers and selected tools, and reserves those computers against concurrent runs. Tool profiles control exposed APIs; they are not an OS permission sandbox (a terminal or desktop can access files too).
 
 Desktop input is reported to the backend through a heartbeat. Subsequent tool calls on that computer wait while the person is interacting; a manual pause stays paused after input ends. An already dispatched provider action can finish. A disconnected renderer or a workspace switch stops new calls after the five-second heartbeat expires. Returning to the workspace reconnects; hiding chat or switching conversations keeps the run connected. Runs stop after 32 model turns or ten minutes. Shell commands use a 30-second timeout inside the computer and bounded output. A command intentionally launching detached processes can outlive the shell call.
 
-Conversation text and tool summaries remain in the local store. Active run state is in API memory, with completed snapshots retained for up to 30 minutes (at most 32 runs total). Reloading the renderer reconnects using the run ID; restarting the API ends run continuity. A lost start response reconnects to the same ID instead of submitting the task twice. Subsequent turns send the latest 120 user/real-agent messages, bounded to about 400,000 characters; older context is omitted. Screenshots stay in the active API loop and are not persisted in the chat store. Requests use `store: false`; this does not change OpenAI's other API data-retention policies.
+Conversation text and tool summaries remain in the local store. Active execution is in API memory; run snapshots are saved under `.data/runs` with restricted file permissions. Reloading the renderer reconnects using the run ID. After an API restart, interrupted runs are explicitly marked cancelled and are never silently replayed; inspect the computer before sending a follow-up. Up to 500 saved runs are retained at startup. Deleting a conversation cancels its active work, waits for in-flight operations, and removes its saved runs. A lost start response reconnects to the same ID instead of submitting the task twice. Subsequent turns send the latest 120 user/real-agent messages, bounded to about 400,000 characters; older context is omitted. Only the three latest screenshots remain in the active model context. Screenshots are not persisted in ordinary run history; the explicit desktop evaluation script saves its verification screenshots locally. Requests use `store: false`; this does not change OpenAI's other API data-retention policies.
 
 Local attachment upload remains a demo feature and is disabled for live chat. Put files on an attached computer and provide their paths; the file reader supports UTF-8 text up to 64 KB. Scheduling and background execution after closing Orbit are not implemented.
 
@@ -87,6 +87,45 @@ pnpm --filter @orbit/api exec tsx scripts/smoke-agent-tools.ts <computer-id>
 The inspected `daytonaio/sandbox:0.6.0` desktop runs Debian 13.3 with Xfce 4.20. Its classic desktop theme is separate from the underlying OS version. Changing the configured image affects new computers; it does not upgrade existing ones.
 
 Implementation reference: [OpenAI computer use with custom tools](https://developers.openai.com/api/docs/guides/tools-computer-use-integration#use-your-own-ui-tools).
+
+## Skills, tools, and model settings
+
+**Skills & tools** supports creating, editing, and deleting instruction profiles. Profiles select terminal, desktop/browser, and file capabilities, plus any connected MCP servers. Change the active profile in conversation settings between runs. Profiles used by conversations cannot be deleted until those conversations select another profile.
+
+Add a **Streamable HTTP MCP URL** and optional bearer token, enable it, then use **Test connection** to discover the server’s tools. Select the connection in a profile to expose those tools to the agent. MCP calls execute on the API server, without requiring an attached computer. Results are bounded, streamed as tool cards, and treated as untrusted content. This release supports HTTP/bearer connections; it does not implement stdio servers or MCP OAuth login. Server tokens remain in the local API’s restricted-permission `integrations.json`, never in model inputs or returned settings.
+
+**Settings → Model providers** saves OpenAI/Anthropic keys and loads the account’s model catalog. Select a model in the composer between runs. Unsupported or unavailable model selections fail explicitly; there is no silent fallback. Claude uses its own Messages API adapter, preserving signed thinking blocks, tool identifiers, and screenshots within a run. OpenAI uses Responses with low reasoning effort. Settings also accepts and tests a Daytona API key. The product remains one local workspace; hosted authentication and tenant management are deferred.
+
+Session titles ignore greetings, use a concise task-based fallback immediately, and are refined by the selected model when available. Existing first-message titles are migrated on load. **Session actions → Rename session** preserves a manual title. **Folder actions → Delete folder** removes its sessions and local attachments while retaining cloud computers and their files. Active agents are stopped before deletion completes.
+
+Agent execution now includes explicit stop-after-verification instructions, bounded waits, short keyboard batches, repeated-action detection, screenshot invalidation after terminal commands, and automatic X11 display discovery. **Run details** shows model identity, calls, elapsed model/tool time, and token usage. These are diagnostics, not a guarantee that every desktop task will succeed.
+
+## Package the local desktop app
+
+```bash
+pnpm --filter @orbit/desktop package --dir  # local .app on macOS
+pnpm --filter @orbit/desktop package        # configured installer targets
+```
+
+The packaged app starts a bundled API on an available loopback port and gives its renderer a runtime token. The package build clears renderer API credentials and excludes `.env` files. On first launch, connect model providers and Daytona in Settings. App data lives under Electron’s user-data directory, with API files in its `api` subdirectory. `ORBIT_DATA_HOME` optionally selects another app-data directory. Preserve the API installation identity to retain ownership of an existing fleet.
+
+The macOS local app has been launch-tested. Distribution signing/notarization requires the developer’s signing credentials; none are configured on this machine. Set `CSC_IDENTITY_AUTO_DISCOVERY=true` or the normal electron-builder signing configuration when preparing a signed release. No update feed or hosted deployment is configured. Windows/Linux targets are defined but have not been built or tested on this machine.
+
+## Agent regression checks
+
+```bash
+pnpm test
+pnpm typecheck
+# With the renderer running at 127.0.0.1:5173:
+pnpm --filter @orbit/desktop exec playwright install chromium
+pnpm --filter @orbit/desktop test:e2e
+# LIVE: consumes model tokens; uses only the named integration-test computer.
+# Starts it if stopped, opens VS Code, independently inspects its window,
+# saves evaluation screenshots, and restores its original stopped state.
+pnpm --filter @orbit/api exec tsx scripts/eval-desktop.ts <computer-id> gpt-6-astra 2
+```
+
+The unit suite includes provider conversion/streaming, MCP discovery and calls against a local HTTP MCP server, cancellation, restart recovery, folder deletion, and title behavior. Browser tests cover the picker, title updates, profile editing, deletion, and MCP setup using controlled API fixtures. Live checks exercise actual providers separately; Claude needs an Anthropic key before a live Fable comparison can run.
 
 ## Try the demo flow
 
@@ -162,7 +201,7 @@ apps/api/                       Local authenticated computer and OpenAI agent AP
 
 Your supplied SVGs are the sources in `src/assets/brand/`: `orbit-mark.svg` for the white ring, `orbit-app.svg` for the blue app tile. `OrbitLogo` is the reusable UI component. The sidebar uses the white mark; the browser favicon and Electron Dock/window use the blue tile.
 
-`pnpm --filter @orbit/desktop icons:generate` rebuilds the PNGs and, on macOS, `resources/icons/orbit.icns`. Electron builds run this automatically. Restart Electron to update its Dock icon. The ICNS is ready for macOS packaging; this repository does not yet produce a packaged `.app`, so its Finder icon must be configured when packaging is added. Include `resources/icons` in that package.
+`pnpm --filter @orbit/desktop icons:generate` rebuilds the PNGs and, on macOS, `resources/icons/orbit.icns`. Electron builds run this automatically. Restart Electron to update its Dock icon. The ICNS is ready for macOS packaging; the package command includes these icons in the macOS app.
 
 ### UI conventions
 

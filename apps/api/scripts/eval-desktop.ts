@@ -42,6 +42,6 @@ try {
   }
 } finally {
   if (active) await request('/agent-runs/' + active, { action: 'cancel' }).catch(() => {});
-  if (machine.status === 'stopped') await request(`/computers/${machineId}/stop`, {}).catch(() => {});
+  if (machine.status === 'stopped') await request(`/computers/${machineId}/stop`, {}).catch(() => computerTools.status(machineId, 'stop')).catch(() => { console.error('Could not restore the test computer to stopped. Stop it in Daytona.'); process.exitCode = 1; });
   mkdirSync('.data/evals', { recursive: true }); writeFileSync('.data/evals/' + Date.now() + '.json', JSON.stringify(reports, null, 2), { mode: 0o600 });
 }

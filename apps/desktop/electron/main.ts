@@ -5,13 +5,19 @@ import { app, BrowserWindow, ipcMain, shell, utilityProcess } from "electron";
 import path from "node:path";
 import { IPC_CHANNELS } from "@orbit/shared";
 
+if (process.env.ORBIT_DATA_HOME) {
+  const dataHome = path.resolve(process.env.ORBIT_DATA_HOME); mkdirSync(dataHome, { recursive: true }); app.setPath('userData', dataHome);
+}
+const primaryInstance = !app.isPackaged || app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
+app.on('second-instance', () => { const window = BrowserWindow.getAllWindows()[0]; if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
 let apiProcess: ReturnType<typeof utilityProcess.fork> | undefined;
 let apiReady: Promise<{ url: string; token: string } | undefined> = Promise.resolve(undefined);
 async function startLocalApi() {
   const port = await new Promise<number>((resolve, reject) => { const server = createServer(); server.once('error', reject); server.listen(0, '127.0.0.1', () => { const port = (server.address() as {port:number}).port; server.close(() => resolve(port)); }); });
   const token = randomBytes(32).toString('hex');
   const directory = path.join(app.getPath('userData'), 'api'); mkdirSync(directory, { recursive: true, mode: 0o700 });
-  apiProcess = utilityProcess.fork(path.join(process.resourcesPath, 'api/server.cjs'), [], { cwd: directory, env: { ...process.env, API_PORT: String(port), ORBIT_API_TOKEN: token, ORBIT_DATA_DIR: directory, ORBIT_WORKSPACE_ID: 'personal' }, stdio: 'pipe' });
+  apiProcess = utilityProcess.fork(path.join(process.resourcesPath, 'api/server.cjs'), [], { cwd: directory, env: { ...process.env, API_PORT: String(port), ORBIT_API_TOKEN: token, ORBIT_DATA_DIR: directory, ORBIT_WORKSPACE_ID: 'personal' }, stdio: 'ignore' });
   apiProcess.on('exit', () => { apiProcess = undefined; });
   const url = `http://127.0.0.1:${port}`;
   for (let attempt = 0; attempt < 120; attempt++) {
@@ -87,6 +93,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (!primaryInstance) return;
   if (process.platform === "darwin") app.dock?.setIcon(appIconPath());
   if (app.isPackaged) apiReady = startLocalApi();
   registerIpcFoundation();

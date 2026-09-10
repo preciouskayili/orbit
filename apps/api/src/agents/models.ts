@@ -66,27 +66,32 @@ export class AnthropicAgentModel implements AgentModel {
 export type Provider = 'openai' | 'anthropic';
 export type ModelOption = { id: string; name: string; provider: Provider };
 export class ModelRegistry {
+  private revision = 0;
   private available: ModelOption[] = [];
   private errors: Partial<Record<Provider, string>> = {};
   constructor(private keys: Partial<Record<Provider, string>>, private preferred?: string) {}
-  setKey(provider: Provider, key: string) { this.keys[provider] = key; this.available = this.available.filter(m => m.provider !== provider); }
+  setKey(provider: Provider, key: string) { this.revision++; this.keys[provider] = key; this.available = this.available.filter(m => m.provider !== provider); }
   async refresh() {
+    const revision = ++this.revision;
+    const keys = { ...this.keys };
+    const available: ModelOption[] = [];
+    const errors: Partial<Record<Provider, string>> = {};
     await Promise.all((['openai', 'anthropic'] as const).map(async provider => {
-      this.available = this.available.filter(m => m.provider !== provider);
-      delete this.errors[provider];
-      if (!this.keys[provider]) return;
+      if (!keys[provider]) return;
       try {
         const models: ModelOption[] = [];
         if (provider === 'openai') {
-          const client = new OpenAI({ apiKey: this.keys.openai, maxRetries: 0, timeout: 15_000 });
-          for await (const m of client.models.list()) if (/^gpt-(6-astra|5(?:[.-]|$))/.test(m.id) && !/audio|realtime|transcri|search|codex|pro|chat/.test(m.id)) models.push({ id: m.id, name: ({ "gpt-6-astra": "GPT-6 Astra", "gpt-5.6-sol": "GPT-5.6 Sol", "gpt-5.6-terra": "GPT-5.6 Terra", "gpt-5.6-luna": "GPT-5.6 Luna" } as Record<string,string>)[m.id] ?? m.id, provider });
+          const client = new OpenAI({ apiKey: keys.openai, maxRetries: 0, timeout: 15_000 });
+          for await (const m of client.models.list()) if (/^gpt-(6-astra|5\.(?:4|5|6)(?:[-.]|$))/.test(m.id) && !/audio|realtime|transcri|search|codex|pro|chat/.test(m.id)) models.push({ id: m.id, name: ({ "gpt-6-astra": "GPT-6 Astra", "gpt-5.6-sol": "GPT-5.6 Sol", "gpt-5.6-terra": "GPT-5.6 Terra", "gpt-5.6-luna": "GPT-5.6 Luna" } as Record<string,string>)[m.id] ?? m.id, provider });
         } else {
-          const client = new Anthropic({ apiKey: this.keys.anthropic, maxRetries: 0, timeout: 15_000 });
+          const client = new Anthropic({ apiKey: keys.anthropic, maxRetries: 0, timeout: 15_000 });
           for await (const m of client.models.list()) models.push({ id: m.id, name: m.display_name, provider });
         }
-        this.available.push(...models);
-      } catch { this.errors[provider] = 'Could not load models. Check this provider’s API key and connection.'; }
+        available.push(...models);
+      } catch { errors[provider] = 'Could not load models. Check this provider’s API key and connection.'; }
     }));
+    if (revision !== this.revision) return this.catalog();
+    this.available = available; this.errors = errors;
     this.available.sort((a,b) => a.id.localeCompare(b.id));
     return this.catalog();
   }

@@ -13,12 +13,14 @@ import {
 } from "@orbit/shared";
 import { ComputerError, type ComputerService } from "./computers/service.js";
 import type { AgentRuns } from "./agents/service.js";
+import { requireAccount, type AccountAccess } from "./auth.js";
 
 export function createApp(options: {
   service?: ComputerService;
   agents?: AgentRuns;
   token?: string;
   workspaceId: string;
+  accountAccess?: AccountAccess;
   integrations?: IntegrationStore;
   models?: ModelRegistry;
   computerConfig?: { configured: () => boolean; configure: (key: string) => Promise<void> };
@@ -110,6 +112,8 @@ export function createApp(options: {
 
     next();
   });
+
+  if (options.accountAccess) app.use('/api/workspaces/:workspaceId', requireAccount(options.accountAccess));
 
   if (options.integrations && options.models) app.use('/api/workspaces/:workspaceId/integrations', (req, res, next) => {
     if (req.params.workspaceId !== options.workspaceId) return res.status(403).json({ message: 'This backend is connected to a different workspace.' });
