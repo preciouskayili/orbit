@@ -57,9 +57,9 @@ export function MachineViewport({ machine, openMachineIds, onCloseComputer }: { 
         <div className="min-w-0 flex-1">
           <SessionComputerTabs machineId={machine.id} openMachineIds={openMachineIds} onCloseComputer={onCloseComputer} />
           <p className="mt-1 text-xs text-zinc-500">
-            {remote ? "Live desktop · agent automation is not connected yet" : human
+            {human
               ? "You’re interacting · agent yields automatically"
-              : "Shared desktop · click or type to interact"}
+              : remote ? "Live desktop · click or type to interact" : "Shared desktop · click or type to interact"}
           </p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">

@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./agents.js";
 
 export const MachineOSSchema = z.enum(["ubuntu", "windows", "macos"]);
 export type MachineOS = z.infer<typeof MachineOSSchema>;
@@ -89,7 +90,7 @@ export interface OrbitDesktopAPI {
 }
 
 export const CreateCloudComputerSchema = CreateMachineInputSchema.extend({
-  os: z.literal("ubuntu"),
+  os: MachineOSSchema,
   requestId: z.string().uuid(),
 });
 export const DesktopSessionSchema = z.object({

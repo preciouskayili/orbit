@@ -1,6 +1,7 @@
 import { log, errorFields } from "../logger.js";
 import { Daytona, type Sandbox } from "@daytona/sdk";
 import { MachineSchema, type Machine, type CreateMachineInput } from "@orbit/shared";
+import { toolSchemas, type AgentComputerTools } from "../agents/tools.js";
 
 export class ComputerError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -23,7 +24,7 @@ export interface DaytonaOptions {
 
 // Daytona labels are the durable computer registry; a localStorage record never
 // grants ownership. Every lookup verifies this installation and workspace.
-export class DaytonaComputers implements ComputerService {
+export class DaytonaComputers implements ComputerService, AgentComputerTools {
   private locks = new Map<string, Promise<unknown>>();
   constructor(private client: Pick<Daytona, "list" | "get" | "create">, private options: DaytonaOptions) {}
   private labels() {
@@ -42,10 +43,15 @@ export class DaytonaComputers implements ComputerService {
       : ["stopping", "archiving"].includes(sandbox.state ?? "") ? "stopping"
       : ["creating", "starting", "restoring", "building", "pending_build"].includes(sandbox.state ?? "") ? "starting"
       : "error";
+    const os = (sandbox.labels["orbit-os"] as Machine["os"]) ||
+      ((sandbox as unknown as { sandboxClass?: string }).sandboxClass === "windows" ? "windows" : "ubuntu");
+    const osLabel = os === "windows" ? "Windows · Daytona"
+      : os === "macos" ? "macOS · Daytona"
+      : "Linux · Daytona";
     return MachineSchema.parse({
       id: sandbox.id, workspaceId: this.options.workspaceId, projectId: "",
       provider: "daytona", name: sandbox.labels["orbit-name"] || sandbox.name,
-      os: "ubuntu", osLabel: "Linux · Daytona", status,
+      os, osLabel, status,
       cpu: sandbox.cpu, ramGb: sandbox.memory, storageGb: sandbox.disk,
       lastSeenAt: new Date().toISOString(),
     });
@@ -72,6 +78,60 @@ export class DaytonaComputers implements ComputerService {
     return machines;
   }
   async get(id: string) { return this.machine(await this.owned(id)); }
+  async execute(name: Parameters<AgentComputerTools["execute"]>[0], args: unknown, beforeAction: () => Promise<void>) {
+    const parsed = toolSchemas[name].parse(args);
+    const sandbox = await this.owned(parsed.machineId);
+    if (sandbox.state !== "started") throw new ComputerError(409, "Start this computer before using agent tools.");
+    // Recheck cancellation and human input after the provider lookup, directly
+    // before each operation. An already dispatched provider action can finish.
+    await beforeAction();
+    if (name === "terminal") {
+      const { command } = toolSchemas.terminal.parse(args);
+      const isWindows = sandbox.labels["orbit-os"] === "windows" || (sandbox as unknown as { sandboxClass?: string }).sandboxClass === "windows";
+      if (isWindows) {
+        const quote = (value: string) => "'" + value.replace(/'/g, "''") + "'";
+        const bounded = `$ProgressPreference = 'SilentlyContinue'; ${command} | Out-String -Width 160`;
+        const result = await sandbox.process.executeCommand(`powershell -NoProfile -NonInteractive -Command ${quote(bounded)}`, undefined, undefined, 40);
+        return { text: `Exit code: ${result.exitCode}\n${result.result.slice(0, 16000)}` };
+      }
+      const quote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
+      // Enforce the deadline inside the computer, even if the API disconnects.
+      const bounded = "timeout -k 2s 30s bash -lc " + quote(command) + " 2>&1 | head -c 16000";
+      const result = await sandbox.process.executeCommand("bash -o pipefail -c " + quote(bounded), undefined, undefined, 40);
+      return { text: `Exit code: ${result.exitCode}\n${result.result.slice(0, 16000)}` };
+    }
+    if (name === "read_file") {
+      const { path } = toolSchemas.read_file.parse(args);
+      const info = await sandbox.fs.getFileDetails(path);
+      if (info.isDir || info.size > 64000) throw new ComputerError(400, "Choose a text file no larger than 64 KB.");
+      await beforeAction();
+      const content = await sandbox.fs.downloadFile(path, 20);
+      return { text: content.subarray(0, 64000).toString("utf8") };
+    }
+    if (name === "write_file") {
+      const { path, content } = toolSchemas.write_file.parse(args);
+      await sandbox.fs.uploadFile(Buffer.from(content), path, 20);
+      return { text: `Wrote ${Buffer.byteLength(content)} bytes to ${path}.` };
+    }
+    const { action } = toolSchemas.computer.parse(args);
+    const desktop = sandbox.computerUse;
+    if ((await desktop.getStatus()).status !== "active") await desktop.start();
+    await beforeAction();
+    switch (action.type) {
+      case "click": await desktop.mouse.click(action.x, action.y, action.button, action.double); break;
+      case "move": await desktop.mouse.move(action.x, action.y); break;
+      case "drag": await desktop.mouse.drag(action.x, action.y, action.endX, action.endY); break;
+      case "scroll": await desktop.mouse.scroll(action.x, action.y, action.direction, action.amount); break;
+      case "type": await desktop.keyboard.type(action.text); break;
+      case "keypress": await desktop.keyboard.press(action.key, action.modifiers); break;
+      case "screenshot": break;
+    }
+    const screenshot = await desktop.screenshot.takeFullScreen();
+    if (!screenshot.screenshot) throw new ComputerError(502, "The desktop returned no screenshot.");
+    const raw = screenshot.screenshot.replace(/^data:image\/png;base64,/, "");
+    if (raw.length > 12_000_000 || !/^[A-Za-z0-9+/=\s]+$/.test(raw)) throw new ComputerError(502, "Invalid desktop screenshot.");
+    return { text: `Computer ${parsed.machineId}: ${action.type} completed. Current screen attached.`, image: "data:image/png;base64," + raw };
+  }
   async create(input: CreateMachineInput, requestId: string) {
     return this.exclusive("create:" + requestId, "create", async () => {
       // A retry after a lost response finds the original machine, including
@@ -80,16 +140,57 @@ export class DaytonaComputers implements ComputerService {
         log("info", "computer.creation.reused", { computerId: existing.id, requestId });
         return this.machine(existing);
       }
-      const sandbox = await this.client.create({
-        name: "orbit-" + requestId,
-        image: this.options.image,
-        resources: { cpu: input.cpu, memory: input.ramGb, disk: input.storageGb },
-        labels: { ...this.labels(), "orbit-name": input.name, "orbit-request": requestId },
-        envVars: { VNC_RESOLUTION: "1440x900" },
-        public: false, ephemeral: false, autoDeleteInterval: -1,
-        autoStopInterval: this.options.autoStopMinutes,
-      }, { timeout: 180 });
-      log("info", "computer.created", { computerId: sandbox.id, cpu: sandbox.cpu, memoryGb: sandbox.memory, diskGb: sandbox.disk });
+      let sandbox: Sandbox;
+      const baseLabels = { ...this.labels(), "orbit-name": input.name, "orbit-os": input.os, "orbit-request": requestId };
+      try {
+        if (input.os === "windows") {
+          const snapshot = process.env.DAYTONA_WINDOWS_SNAPSHOT || (
+            input.cpu <= 1 && input.ramGb <= 4 ? "windows-small" :
+            input.cpu <= 2 && input.ramGb <= 8 ? "windows-medium" :
+            input.cpu <= 4 && input.ramGb <= 16 ? "windows-large" : "windows-xlarge"
+          );
+          sandbox = await this.client.create({
+            name: "orbit-" + requestId,
+            snapshot,
+            labels: baseLabels,
+            public: false, ephemeral: false, autoDeleteInterval: -1,
+            autoStopInterval: this.options.autoStopMinutes,
+          }, { timeout: 180 });
+        } else if (input.os === "macos") {
+          const snapshot = process.env.DAYTONA_MACOS_SNAPSHOT;
+          if (!snapshot) {
+            throw new ComputerError(400, "macOS sandboxes require Daytona early access. Sign up at daytona.io and configure DAYTONA_MACOS_SNAPSHOT in apps/api/.env.");
+          }
+          sandbox = await this.client.create({
+            name: "orbit-" + requestId,
+            snapshot,
+            labels: baseLabels,
+            public: false, ephemeral: false, autoDeleteInterval: -1,
+            autoStopInterval: this.options.autoStopMinutes,
+          }, { timeout: 180 });
+        } else {
+          sandbox = await this.client.create({
+            name: "orbit-" + requestId,
+            image: this.options.image,
+            resources: { cpu: input.cpu, memory: input.ramGb, disk: input.storageGb },
+            labels: baseLabels,
+            envVars: { VNC_RESOLUTION: "1440x900" },
+            public: false, ephemeral: false, autoDeleteInterval: -1,
+            autoStopInterval: this.options.autoStopMinutes,
+          }, { timeout: 180 });
+        }
+      } catch (error: unknown) {
+        if (error instanceof ComputerError) throw error;
+        const msg = (error as Error)?.message || "";
+        if (msg.includes("Tier 1 and Tier 2") || msg.includes("support@daytona.io")) {
+          throw new ComputerError(403, "Windows sandboxes are restricted to Daytona Tier 3+ organizations. Contact support@daytona.io to request access.");
+        }
+        if (msg.includes("not available in region")) {
+          throw new ComputerError(400, "Windows snapshots are hosted in Daytona region 'us'. Set DAYTONA_TARGET=us in apps/api/.env and restart the API.");
+        }
+        throw error;
+      }
+      log("info", "computer.created", { computerId: sandbox.id, os: input.os, cpu: sandbox.cpu, memoryGb: sandbox.memory, diskGb: sandbox.disk });
       return this.machine(sandbox);
     });
   }

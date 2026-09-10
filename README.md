@@ -2,7 +2,7 @@
 
 Computers for agents. Work with your agent in a persistent conversation, give it a fleet of computers, watch their desktops, and work directly alongside them.
 
-Orbit includes a **local interactive frontend prototype** and an optional **real Daytona computer integration**. Agent responses and agent execution are still simulated. In demo mode, provisioning and desktops are simulated too; in Daytona mode, computers run in your Daytona account.
+Orbit includes a **local demo** and **real OpenAI agents on Daytona computers**. In Daytona mode, agents stream replies and use terminal, text-file, and desktop tools on computers attached to their conversation. Demo mode runs locally with simulated responses and desktops.
 
 ## Run
 
@@ -19,14 +19,14 @@ No API server or credentials are required for the frontend. The renderer runs at
 pnpm --filter @orbit/desktop test  # store + component interaction tests
 pnpm typecheck                   # all packages
 pnpm build                       # production builds
-pnpm dev:api                     # independent legacy mock API
+pnpm dev:api                     # local computer and agent API
 ```
 
 `pnpm dev` starts the Express API at port 4000 and the desktop app. Cloud mode calls that API; demo mode runs without it.
 
 ## Real Daytona computers
 
-Orbit now supports real Linux desktops through a local Daytona backend. Conversations and agents remain a local prototype; no agent executes commands on these computers yet.
+Orbit supports real Linux desktops through a local Daytona backend. Add an OpenAI API key to let agents work on these computers from chat.
 
 1. Copy `apps/api/.env.example` to `apps/api/.env`. Set `DAYTONA_API_KEY` and generate `ORBIT_API_TOKEN` with the command in that file.
 2. Copy `apps/desktop/.env.example` to `apps/desktop/.env`. Set `VITE_COMPUTER_PROVIDER=daytona` and copy **only the local API token** into `VITE_ORBIT_API_TOKEN`. Never put the Daytona key in the renderer.
@@ -55,7 +55,40 @@ The live test records its retry ID in `/tmp/orbit-daytona-smoke-request.json`. I
 
 Provider references: [Computer Use](https://www.daytona.io/docs/en/computer-use/), [Persistence](https://www.daytona.io/docs/en/persistence/), [SDK](https://www.daytona.io/docs/en/typescript-sdk/daytona/).
 
-## Try the flow
+## OpenAI agents
+
+1. Add `OPENAI_API_KEY` to `apps/api/.env`. Keep it on the API server alongside the Daytona key. `OPENAI_MODEL` defaults to `gpt-5.6-sol`; choose a model with function calling and image-input support if changing it.
+2. Restart the API. OpenAI agents are enabled automatically with `VITE_COMPUTER_PROVIDER=daytona`. Set `VITE_AGENT_PROVIDER=demo` to keep real agents disabled.
+3. Send a chat message. For computer work, attach a running computer through **+**, or mention it and allow access. The selected instruction profile controls which tools are offered. No computer is required for ordinary chat.
+4. Follow the streamed reply and expandable tool results. **Pause / Resume** controls subsequent calls; **Stop** ends the current agent turn and leaves the conversation available. Send a follow-up after it finishes. Action confirmations appear inline with **Allow action / Deny action**. The model requests these confirmations based on its instructions; Orbit does not classify every arbitrary shell command or GUI action for consequential effects.
+
+The backend uses the OpenAI Responses API with function tools for terminal, text-file reading/writing, desktop screenshots and input, and action confirmation. Each tool names its target computer. The backend verifies installation/workspace ownership, restricts calls to the run's attached computers and selected tools, and reserves those computers against concurrent runs. Tool profiles control exposed APIs; they are not an OS permission sandbox (a terminal or desktop can access files too).
+
+Desktop input is reported to the backend through a heartbeat. Subsequent tool calls on that computer wait while the person is interacting; a manual pause stays paused after input ends. An already dispatched provider action can finish. A disconnected renderer or a workspace switch stops new calls after the five-second heartbeat expires. Returning to the workspace reconnects; hiding chat or switching conversations keeps the run connected. Runs stop after 32 model turns or ten minutes. Shell commands use a 30-second timeout inside the computer and bounded output. A command intentionally launching detached processes can outlive the shell call.
+
+Conversation text and tool summaries remain in the local store. Active run state is in API memory, with completed snapshots retained for up to 30 minutes (at most 32 runs total). Reloading the renderer reconnects using the run ID; restarting the API ends run continuity. A lost start response reconnects to the same ID instead of submitting the task twice. Subsequent turns send the latest 120 user/real-agent messages, bounded to about 400,000 characters; older context is omitted. Screenshots stay in the active API loop and are not persisted in the chat store. Requests use `store: false`; this does not change OpenAI's other API data-retention policies.
+
+Local attachment upload remains a demo feature and is disabled for live chat. Put files on an attached computer and provide their paths; the file reader supports UTF-8 text up to 64 KB. Scheduling and background execution after closing Orbit are not implemented.
+
+```bash
+pnpm --filter @orbit/api test
+pnpm --filter @orbit/desktop test
+# LIVE: consumes OpenAI tokens and reads an existing running desktop.
+# Checks terminal, /etc/os-release, and a screenshot without modifying files/UI.
+pnpm --filter @orbit/api exec tsx scripts/smoke-agent.ts <computer-id>
+# Optional: start a stopped test computer and restore it to stopped afterwards.
+pnpm --filter @orbit/api exec tsx scripts/smoke-agent.ts <computer-id> --start
+# Exercise writing, GUI typing/saving, and reading back a unique temporary file.
+pnpm --filter @orbit/api exec tsx scripts/smoke-agent.ts <computer-id> --interactive
+# Isolate the Daytona tools from OpenAI (restores the original stopped state).
+pnpm --filter @orbit/api exec tsx scripts/smoke-agent-tools.ts <computer-id>
+```
+
+The inspected `daytonaio/sandbox:0.6.0` desktop runs Debian 13.3 with Xfce 4.20. Its classic desktop theme is separate from the underlying OS version. Changing the configured image affects new computers; it does not upgrade existing ones.
+
+Implementation reference: [OpenAI computer use with custom tools](https://developers.openai.com/api/docs/guides/tools-computer-use-integration#use-your-own-ui-tools).
+
+## Try the demo flow
 
 1. Open **Computers** to see the one shared workspace fleet. Projects show only computers assigned to their active conversations.
 2. Start a conversation. Choose a project and agent; no computer is required yet.
@@ -67,7 +100,7 @@ Provider references: [Computer Use](https://www.daytona.io/docs/en/computer-use/
 
 ### File attachments
 
-Use **+ → Attach files** to choose files, then remove any unwanted chips before sending. File-only messages are supported. Up to eight files, 10 MB each and 25 MB total, are saved locally in IndexedDB; conversation metadata stays in the existing store. Attachments appear in a compact grid before and after sending. Images open in a popup; PDFs, DOCX, and text files open in a document pane beside chat. PDF previews include page navigation; DOCX previews show text rather than exact Word formatting. Unsupported formats remain downloadable. Files are workspace-scoped and are **not uploaded or read by an agent** in this prototype. Replace `lib/chat-attachments.ts` with authenticated object storage when connecting the backend.
+In demo mode, use **+ → Attach files** to choose files, then remove any unwanted chips before sending. File-only messages are supported. Up to eight files, 10 MB each and 25 MB total, are saved locally in IndexedDB; conversation metadata stays in the existing store. Attachments appear in a compact grid before and after sending. Images open in a popup; PDFs, DOCX, and text files open in a document pane beside chat. PDF previews include page navigation; DOCX previews show text rather than exact Word formatting. Unsupported formats remain downloadable. Files are workspace-scoped and are **not uploaded or read by an agent** in this prototype. Replace `lib/chat-attachments.ts` with authenticated object storage when connecting the backend.
 
 ### Computer mentions and permissions
 
@@ -75,7 +108,7 @@ Type `@` to search your workspace computers, then select one with the keyboard o
 
 Open **Conversation settings (···)** for project/agent setup and computer permissions. The default policy is to ask first. You can explicitly opt into **Allow available workspace computers** for the current conversation. The agent can then select an available machine through **+ → Let agent choose**, or a subsequent message when none is assigned. Human-controlled computers still require approval, busy computers cannot be reassigned, and the policy can be switched back to asking. Ending a run releases its assignments but preserves the machines and files.
 
-Agent identity and its activity orb appear within the conversation, not in a duplicate header. Conversation settings live beside the composer. Agent responses render Markdown, lists, code, and tables. Expandable tool cards show demo commands, searches, file actions, inputs, and output. No commands or searches run externally in this prototype.
+Agent identity and its activity orb appear within the conversation, not in a duplicate header. Conversation settings live beside the composer. Agent responses render Markdown, lists, code, and tables. Expandable tool cards show inputs and results. Demo cards are labeled **Demo**; live tool cards show running/completed/failed status.
 
 The demo shell supports `help`, `pwd`, `ls`, `cat <filename>`, `uname`, and `clear`. The browser preview validates an address without loading external pages.
 
@@ -122,7 +155,7 @@ apps/desktop/
     assets/os/                  Downloaded OS logos and attribution
   tests/                        Lifecycle, persistence, menus, chat, GUI controls
 packages/shared/                Shared Zod contracts and Electron IPC types
-apps/api/                       Legacy in-memory Express scaffold
+apps/api/                       Local authenticated computer and OpenAI agent API
 ```
 
 ### Brand and app icon
@@ -151,11 +184,11 @@ For backend work:
 
 - Replace `lib/api.ts` with authenticated requests for fleet reads.
 - Replace local `orbitActions` mutations with service calls and reconcile their responses into state. Components that use `useOrbit` need that subscription fed by server state too; changing the adapter alone is not enough.
-- Replace the simulated message/preview actions with agent events and streamed responses.
+- Extend the OpenAI run service with durable server conversation storage and event delivery as needed.
 - Mount a remote-session client at `computer-desktop.tsx` / `machine-viewport.tsx`. Keep video transport and input forwarding outside the React presentation code.
 - Implement server-enforced workspace authorization, computer ownership, handoff locks, durable file storage, and scheduling. Client checks here are prototype behavior, not a security boundary.
 
-No authentication, billing, OS licensing, real provisioning, remote input, external browser automation, or background scheduling is implemented. macOS availability and licensing need a provider decision before being offered as a real cloud option.
+Hosted multi-user authentication, billing, OS licensing, and background scheduling are not implemented. Daytona mode includes real provisioning, remote input, and agent desktop automation. macOS availability and licensing need a provider decision before being offered as a real cloud option.
 
 ## Verification
 

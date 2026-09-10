@@ -1,4 +1,4 @@
-import { cloudComputersEnabled } from "./computer-config";
+import { cloudComputersEnabled, liveAgentsEnabled } from "./computer-config";
 import { attachmentSchema, removeAttachments, type ChatAttachment } from "./chat-attachments";
 import { z } from "zod";
 import {
@@ -9,6 +9,8 @@ import {
   ProjectSchema,
   type CreateMachineInput,
   type Machine,
+  AgentRunSchema,
+  type AgentRun,
 } from "@orbit/shared";
 import * as seed from "./demo-seed";
 
@@ -42,12 +44,15 @@ const taskSchema = z.object({
   createdAt: z.string(),
   messages: z.array(
     z.object({
+      id: z.string().optional(),
+      runId: z.string().optional(),
       role: z.enum(["user", "assistant"]),
       content: z.string(),
       attachments: z.array(attachmentSchema).max(8).optional(),
       tool: z
         .object({
-          name: z.enum(["terminal", "search", "files"]),
+          name: z.enum(["terminal", "search", "files", "computer"]),
+          status: z.enum(["running", "completed", "failed"]).optional(),
           input: z.string(),
           output: z.string(),
           machineId: z.string().optional(),
@@ -57,6 +62,7 @@ const taskSchema = z.object({
   ),
   events: z.array(z.object({ title: z.string(), timestamp: z.string() })),
   artifacts: z.array(z.object({ name: z.string(), content: z.string() })),
+  liveRun: AgentRunSchema.optional(),
 });
 const scheduleSchema = z.object({
   id: z.string(),
@@ -335,7 +341,7 @@ function requestComputer(
       content:
         "Using **" +
         machine.name +
-        "** under the workspace-computer permission you granted this conversation. This is a simulated allocation.",
+        "** under the workspace-computer permission you granted this conversation." + (liveAgentsEnabled ? "" : " This is a simulated allocation."),
     });
   } else {
     conversation.requests.push({ id: id(), machineId, status: "pending" });
@@ -407,6 +413,26 @@ function provision(
 const inputLeases = new Map<string, { token: string }>();
 const inputPausedRuns = new Set<string>();
 export const orbitActions = {
+  beginAgentRun(workspaceId: string, run: AgentRun) {
+    update((d) => {
+      if (d.workspaceId !== workspaceId) throw new Error("The workspace changed before the agent started.");
+      const task = taskInWorkspace(d, run.conversationId);
+      if (task.liveRun && !["completed", "failed", "cancelled"].includes(task.liveRun.status)) throw new Error("An agent is already active in this conversation.");
+      task.liveRun = run;
+      task.status = "running";
+    });
+  },
+  receiveAgentRun(workspaceId: string, run: AgentRun) {
+    const current = state.tasks.find((t) => t.id === run.conversationId)?.liveRun;
+    if (current?.id !== run.id || JSON.stringify(current) === JSON.stringify(run)) return;
+    update((d) => {
+      const task = d.tasks.find((t) => t.id === run.conversationId && d.projects.some((p) => p.id === t.projectId && p.workspaceId === workspaceId));
+      if (!task || task.liveRun?.id !== run.id) return;
+      task.liveRun = run;
+      task.messages = [...task.messages.filter((m) => m.runId !== run.id), ...run.messages.map((m) => ({ ...m, runId: run.id }))];
+      if (!["completed", "cancelled"].includes(task.status)) task.status = run.status === "running" ? "running" : "paused";
+    });
+  },
   beginInteraction(machineId: string) {
     const machine = machineInWorkspace(state, machineId);
     if (machine.status !== "running")
@@ -731,11 +757,11 @@ export const orbitActions = {
         artifacts: [],
         messages: [
           { role: "user", content: prompt.trim(), attachments },
-          {
+          ...(!liveAgentsEnabled ? [{
             role: "assistant",
             content:
               "Let’s work on this together. Attach an existing computer or create one below, and you can inspect its desktop alongside our conversation. This is a local preview: responses and execution are simulated until the agent backend is connected.",
-          },
+          } as const] : []),
         ],
       });
       d.activeConversations[d.workspaceId] = conversationId;
@@ -838,7 +864,7 @@ export const orbitActions = {
         );
         if (machine) requestComputer(d, task, machine.id);
       }
-      task.messages.push({
+      if (!liveAgentsEnabled) task.messages.push({
         role: "assistant",
         content:
           "Your instructions are saved with our conversation. This prototype records context; a connected agent will respond and act on it.",
@@ -891,7 +917,7 @@ export const orbitActions = {
       conversation.messages.push({
         role: "assistant",
         content: allow
-          ? "Access granted for this conversation. Open the computer to follow along, then continue the demo when you’re ready."
+          ? liveAgentsEnabled ? "Access granted for this conversation. The agent can now use this computer." : "Access granted for this conversation. Open the computer to follow along, then continue the demo when you’re ready."
           : "Understood. I won’t use that computer. Mention another or attach one you’re comfortable sharing.",
       });
     });

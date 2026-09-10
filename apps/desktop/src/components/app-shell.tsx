@@ -1,4 +1,5 @@
 import { CloudComputerSync } from "./cloud-computer-sync";
+import { LiveAgentSync } from "./live-agent-sync";
 import {
   useEffect,
   useRef,
@@ -119,6 +120,7 @@ export function AppShell() {
 
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         <CloudComputerSync />
+        <LiveAgentSync />
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <div
             id="chat-panel"

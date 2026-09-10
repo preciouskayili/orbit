@@ -1,4 +1,6 @@
-import { cloudComputersEnabled } from "@/lib/computer-config";
+import { cloudComputersEnabled, liveAgentsEnabled } from "@/lib/computer-config";
+import { liveAgents, agentActive } from "@/lib/live-agents";
+import type { AgentControl } from "@orbit/shared";
 import { AttachmentGrid } from "./attachment-grid";
 import { filePreview } from "@/lib/file-preview";
 import { useEffect, useRef, useState } from "react";
@@ -126,8 +128,15 @@ export function AgentPanel({
       -1,
     ) ?? -1;
   const preview = useAgentPreview(conversation, setError);
+  const liveRun = liveAgentsEnabled ? conversation?.liveRun : undefined;
+  const activeRun = liveAgentsEnabled && agentActive(conversation);
+  const phase = liveRun ? liveRun.status === "running" ? "working" : activeRun ? "waiting" : "idle" : preview.phase;
   const status = interacting
     ? "You’re interacting · agent is waiting"
+    : activeRun
+      ? liveRun?.approval ? "Waiting for your confirmation" : liveRun?.status === "paused" ? "Agent paused" : liveRun?.status === "waiting" ? "Agent waiting" : "Agent working"
+    : liveRun?.status === "completed" ? "Ready for your next message"
+    : liveRun?.status === "failed" ? "Agent stopped · check the error below"
     : preview.playing
       ? {
           working: "Preparing computers",
@@ -149,7 +158,7 @@ export function AgentPanel({
 
   useEffect(() => {
     bottom.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
-  }, [conversation?.messages.length, conversation?.id]);
+  }, [conversation?.messages.length, conversation?.messages.at(-1)?.content, conversation?.id]);
   useEffect(() => {
     const selected = filePreview.get();
     if (selected && !("id" in selected.file) && !files.includes(selected.file))
@@ -169,6 +178,15 @@ export function AgentPanel({
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+  async function runAgent(id: string) {
+    try { await liveAgents.start(id); setError(""); }
+    catch (cause) { setError((cause as Error).message); }
+  }
+  async function controlAgent(action: AgentControl) {
+    if (!liveRun) return;
+    try { await liveAgents.control(state.workspaceId, liveRun.id, action); setError(""); }
+    catch (cause) { setError((cause as Error).message); }
   }
   function ensureConversation() {
     return (
@@ -213,6 +231,8 @@ export function AgentPanel({
   async function send() {
     if (
       sendingRef.current ||
+      activeRun ||
+      ended ||
       (!draft.trim() && !files.length) ||
       !projectId ||
       !agentId
@@ -232,6 +252,7 @@ export function AgentPanel({
       }
       const content = draft.trim() || "Review the attached files.";
       const mentions = mentionedComputers(content, allComputers);
+      let sessionId = conversation?.id;
       if (conversation)
         orbitActions.message(conversation.id, content, mentions, saved);
       else {
@@ -243,11 +264,13 @@ export function AgentPanel({
           saved,
         );
         navigate("/sessions/" + id);
+        sessionId = id;
       }
       committed = true;
       setDraft("");
       setFiles([]);
       setError("");
+      if (liveAgentsEnabled && sessionId) await runAgent(sessionId);
     } catch (e) {
       if (!committed)
         await removeAttachments(workspaceId, saved).catch(() => {});
@@ -324,7 +347,7 @@ export function AgentPanel({
                   index > lastUserMessageIndex
                     ? interacting
                       ? "waiting"
-                      : preview.phase
+                      : phase
                     : "idle"
                 }
                 showAuthor={
@@ -359,6 +382,7 @@ export function AgentPanel({
                           true,
                         );
                         navigate("/sessions/" + conversation.id + "?computer=" + request.machineId);
+                        if (liveAgentsEnabled) void runAgent(conversation.id);
                       })
                     }
                   >
@@ -368,13 +392,14 @@ export function AgentPanel({
                     size="sm"
                     variant="ghost"
                     onClick={() =>
-                      act(() =>
+                      act(() => {
                         orbitActions.resolveComputerRequest(
                           conversation.id,
                           request.id,
                           false,
-                        ),
-                      )
+                        );
+                        if (liveAgentsEnabled) void runAgent(conversation.id);
+                      })
                     }
                   >
                     Deny
@@ -395,6 +420,16 @@ export function AgentPanel({
                 ↓ {file.name}
               </a>
             ))}
+            {liveRun?.approval && (
+              <div className="rounded-xl bg-white/[0.055] p-4">
+                <p className="text-sm text-zinc-200">Confirm this action</p>
+                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-zinc-400">{liveRun.approval.description}</p>
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" onClick={() => void controlAgent({ action: "approve", approvalId: liveRun.approval!.id, allow: true })}>Allow action</Button>
+                  <Button size="sm" variant="ghost" onClick={() => void controlAgent({ action: "approve", approvalId: liveRun.approval!.id, allow: false })}>Deny action</Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div ref={bottom} />
@@ -408,7 +443,16 @@ export function AgentPanel({
             >
               {status}
             </span>
-            {preview.playing ? (
+            {activeRun ? (
+              <>
+                <Button size="sm" variant="ghost" onClick={() => void controlAgent({ action: liveRun?.status === "paused" ? "resume" : "pause" })}>
+                  {liveRun?.status === "paused" ? "Resume" : "Pause"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => void controlAgent({ action: "cancel" })}>Stop</Button>
+              </>
+            ) : liveAgentsEnabled && !ended && conversation.messages.some((m) => m.role === "user") && pending.length === 0 && liveRun?.status !== "completed" ? (
+              <Button size="sm" variant="secondary" disabled={sending} onClick={() => void runAgent(conversation.id)}>Run agent</Button>
+            ) : preview.playing ? (
               <Button size="sm" variant="ghost" onClick={preview.pause}>
                 Pause
               </Button>
@@ -432,6 +476,7 @@ export function AgentPanel({
           </div>
         )}
         <ErrorNotice message={error} />
+        <ErrorNotice message={liveRun?.error ?? ""} />
         <form
           className="rounded-2xl bg-[#262626] p-3"
           onSubmit={(e) => {
@@ -490,19 +535,19 @@ export function AgentPanel({
                 <Plus className="size-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-64">
-                <DropdownMenuItem onClick={() => fileInput.current?.click()}>
+                <DropdownMenuItem disabled={liveAgentsEnabled} onClick={() => fileInput.current?.click()}>
                   <FileText className="size-4" />
                   Attach files
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={!projectId || !agentId || ended}
+                  disabled={!projectId || !agentId || ended || activeRun}
                   onClick={() => setCreateOpen(true)}
                 >
                   <Plus className="size-4" />
                   New computer
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={!projectId || !agentId || ended}
+                  disabled={!projectId || !agentId || ended || activeRun}
                   onClick={() =>
                     act(() =>
                       orbitActions.requestAvailableComputer(
@@ -534,7 +579,7 @@ export function AgentPanel({
                     available.map((m) => (
                       <DropdownMenuItem
                         key={m.id}
-                        disabled={!projectId || !agentId || ended}
+                        disabled={!projectId || !agentId || ended || activeRun}
                         onClick={() => attach([m.id])}
                       >
                         <OsLogo os={m.os} className="size-4" />
@@ -572,6 +617,8 @@ export function AgentPanel({
               aria-label="Send message"
               disabled={
                 sending ||
+                activeRun ||
+                ended ||
                 (!draft.trim() && !files.length) ||
                 !projectId ||
                 !agentId
@@ -582,7 +629,7 @@ export function AgentPanel({
           </div>
         </form>
         <p className="text-center text-[10px] text-zinc-600">
-          {cloudComputersEnabled ? "Live computers · agent not connected yet" : "Local preview · cloud execution not connected"}
+          {liveAgentsEnabled ? "OpenAI · uses attached computers · files stay on the computer" : cloudComputersEnabled ? "Live computers · agent not connected yet" : "Local preview · cloud execution not connected"}
         </p>
       </div>
       <CreateMachineDialog
@@ -646,12 +693,16 @@ export function AgentPanel({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
+                  onClick={async () => {
+                    if (activeRun) {
+                      try { await liveAgents.control(state.workspaceId, liveRun!.id, { action: "cancel" }); }
+                      catch (cause) { setError((cause as Error).message); return; }
+                    }
                     act(() => {
                       orbitActions.taskAction(conversation.id, "cancel");
                       setSettingsOpen(false);
-                    })
-                  }
+                    });
+                  }}
                 >
                   End run · keep computers
                 </Button>

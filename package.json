@@ -10,7 +10,8 @@
     "build:packages": "pnpm --filter @orbit/shared build && pnpm --filter @orbit/ui build",
     "build": "pnpm -r --workspace-concurrency=1 build",
     "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
-    "clean": "pnpm -r --if-present clean"
+    "clean": "pnpm -r --if-present clean",
+    "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

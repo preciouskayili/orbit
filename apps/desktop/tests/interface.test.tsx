@@ -352,6 +352,42 @@ test("agent responses render markdown and tool details without raw HTML executio
   );
   expect(screen.getByText("$ pwd")).toBeTruthy();
   expect(screen.getByText("/workspace")).toBeTruthy();
+
+  view.rerender(
+    <AgentMessage
+      agentName="Orbit agent"
+      message={{
+        role: "assistant",
+        content: "Using desktop",
+        tool: {
+          name: "computer",
+          input: JSON.stringify({ machineId: "mine", action: { type: "click", x: 300, y: 400, button: "left", double: true } }),
+          output: "Click completed",
+          status: "completed",
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("click (300, 400) double [left]")).toBeTruthy();
+  expect(screen.getByText("Completed")).toBeTruthy();
+
+  view.rerender(
+    <AgentMessage
+      agentName="Orbit agent"
+      message={{
+        role: "assistant",
+        content: "Running command",
+        tool: {
+          name: "terminal",
+          input: JSON.stringify({ machineId: "mine", command: "uname -a" }),
+          output: "",
+          status: "running",
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("$ uname -a")).toBeTruthy();
+  expect(screen.getByText("Running")).toBeTruthy();
 });
 
 test("desktop fitting preserves the chosen aspect ratio within the available pane", () => {

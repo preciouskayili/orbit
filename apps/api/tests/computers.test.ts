@@ -32,9 +32,9 @@ function fixture() {
         id: randomUUID(),
         name: params.name,
         labels: params.labels,
-        cpu: params.resources.cpu,
-        memory: params.resources.memory,
-        disk: params.resources.disk,
+        cpu: params.resources?.cpu ?? (params.snapshot === "windows-small" ? 1 : 2),
+        memory: params.resources?.memory ?? (params.snapshot === "windows-small" ? 4 : 8),
+        disk: params.resources?.disk ?? (params.snapshot === "windows-small" ? 30 : 50),
         state: "started",
         async refreshData() {},
         async setLabels(labels: Record<string, string>) {
@@ -163,3 +163,48 @@ test("API requires a token, checks workspace ownership, validates requests and d
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
+
+test("Windows computers are created using matching Daytona snapshots and correctly labeled", async () => {
+  const f = fixture();
+  const requestId = randomUUID();
+  const machine = await f.service.create(
+    {
+      name: "Windows QA",
+      os: "windows",
+      cpu: 2,
+      ramGb: 8,
+      storageGb: 50,
+    },
+    requestId,
+  );
+  assert.equal(machine.os, "windows");
+  assert.equal(machine.osLabel, "Windows · Daytona");
+  assert.equal(machine.name, "Windows QA");
+
+  // Reusing the same request ID returns the existing Windows machine
+  const reused = await f.service.create(
+    {
+      name: "Windows QA",
+      os: "windows",
+      cpu: 2,
+      ramGb: 8,
+      storageGb: 50,
+    },
+    requestId,
+  );
+  assert.equal(reused.id, machine.id);
+  assert.equal(f.creates(), 1);
+});
+
+test("macOS cloud computer requires DAYTONA_MACOS_SNAPSHOT configuration", async () => {
+  const f = fixture();
+  const requestId = randomUUID();
+  await assert.rejects(
+    f.service.create(
+      { name: "Mac Build", os: "macos", cpu: 4, ramGb: 8, storageGb: 40 },
+      requestId,
+    ),
+    /macOS sandboxes require Daytona early access/,
+  );
+});
+

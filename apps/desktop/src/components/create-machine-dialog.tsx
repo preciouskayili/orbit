@@ -17,7 +17,7 @@ import { OsLogo } from "@/components/os-logo";
 import { ErrorNotice, Field } from "@/components/flow-ui";
 import { orbitActions } from "@/lib/orbit-store";
 const operatingSystems = [
-  { value: "ubuntu" as const, label: "Ubuntu", detail: "24.04 LTS" },
+  { value: "ubuntu" as const, label: "Linux", detail: "Debian 13 · Xfce" },
   { value: "windows" as const, label: "Windows", detail: "Windows 11" },
   { value: "macos" as const, label: "macOS", detail: "Apple silicon" },
 ];
@@ -105,9 +105,11 @@ export function CreateMachineDialog({
                 <button
                   key={item.value}
                   type="button"
-                  disabled={cloudComputersEnabled && item.value !== "ubuntu"}
                   aria-pressed={os === item.value}
-                  onClick={() => setOS(item.value)}
+                  onClick={() => {
+                    setOS(item.value);
+                    if (item.value === "windows" && storageGb < 30) setStorageGb(50);
+                  }}
                   className={
                     "flex flex-col items-start gap-2 rounded-xl p-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-400 " +
                     (os === item.value
@@ -118,7 +120,13 @@ export function CreateMachineDialog({
                   <OsLogo os={item.value} className="size-6" />
                   <span className="text-sm text-zinc-200">{item.label}</span>
                   <span className="text-[11px] text-zinc-500">
-                    {cloudComputersEnabled ? item.value === "ubuntu" ? "Linux desktop" : "Not available yet" : item.detail}
+                    {cloudComputersEnabled
+                      ? item.value === "ubuntu"
+                        ? "Debian 13 · Xfce"
+                        : item.value === "windows"
+                          ? "Windows 11 VM"
+                          : "Early access"
+                      : item.detail}
                   </span>
                 </button>
               ))}
