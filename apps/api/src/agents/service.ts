@@ -17,7 +17,7 @@ export interface AgentModel {
 export class OpenAIAgentModel implements AgentModel {
   private client: OpenAI;
   constructor(apiKey: string, private model = "gpt-6-astra", options: Pick<ClientOptions, "baseURL" | "fetch"> = {}) {
-    this.client = new OpenAI({ apiKey, maxRetries: 0, timeout: 60_000, ...options });
+    this.client = new OpenAI({ apiKey, maxRetries: 2, timeout: 60_000, ...options });
   }
   async respond(input: ResponseInput, instructions: string, tools: FunctionTool[], signal: AbortSignal, onText: (id: string, delta: string) => void) {
     const stream = await this.client.responses.create({
@@ -296,6 +296,7 @@ export class AgentRuns {
       }
       throw new ComputerError(422, `The agent reached its ${this.maxTurns}-turn limit. Review the results before continuing.`);
     } catch (error) {
+      log("error", "agent.execute.failed", { runId: run.view.id, ...errorFields(error), message: error instanceof Error ? error.message.slice(0, 200) : "unknown" });
       run.view.status = run.controller.signal.aborted ? "cancelled" : "failed";
       run.view.error = run.controller.signal.aborted
         ? run.controller.signal.reason?.message === "Run reached its 10-minute limit." ? "Run reached its 10-minute limit. Inspect the computer before continuing." : "Run stopped. An action already sent to the computer may have finished."
@@ -304,6 +305,10 @@ export class AgentRuns {
         : error instanceof OpenAI.APIError && error.status === 401 ? "OpenAI rejected the API key. Check OPENAI_API_KEY on the API server."
         : error instanceof OpenAI.APIError && error.status === 429 ? "OpenAI usage or rate limit reached. Check your API billing and limits."
         : error instanceof OpenAI.APIError && error.status === 404 ? "The configured OpenAI model is unavailable. Check OPENAI_MODEL and your API model access."
+        : error instanceof Error && (error.name.includes("Daytona") || error.message.toLowerCase().includes("daytona") || error.message.includes("ENOTFOUND"))
+          ? `Could not reach Daytona cloud computer. Check internet connection and DNS: ${error.message}`
+        : error instanceof Error && error.message
+          ? error.message
         : "The agent could not continue. Check the selected provider’s credentials, model access, and computer connection.";
       for (const m of run.view.messages) if (m.tool?.status === "running") { m.tool.status = "failed"; m.tool.output = run.view.error; }
     } finally {

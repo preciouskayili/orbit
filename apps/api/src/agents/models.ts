@@ -41,7 +41,7 @@ export function anthropicMessages(input: ResponseInput): MessageParam[] {
 export class AnthropicAgentModel implements AgentModel {
   private client: Anthropic;
   constructor(apiKey: string, private model: string, options: { fetch?: typeof fetch; baseURL?: string } = {}) {
-    this.client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 0, ...options });
+    this.client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 2, ...options });
   }
   async respond(input: ResponseInput, instructions: string, tools: FunctionTool[], signal: AbortSignal, onText: (id: string, delta: string) => void) {
     const id = randomUUID();

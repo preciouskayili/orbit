@@ -50,7 +50,18 @@ export class DaytonaComputers implements ComputerService, AgentComputerTools {
     return { "orbit-app": "orbit", "orbit-instance": this.options.instanceId, "orbit-workspace": this.options.workspaceId };
   }
   private async owned(id: string) {
-    const sandbox = await this.client.get(id);
+    let sandbox: Sandbox;
+    try {
+      sandbox = await this.client.get(id);
+    } catch (error) {
+      if (error instanceof ComputerError) throw error;
+      const status = (error as { status?: number; statusCode?: number })?.status ?? (error as { statusCode?: number })?.statusCode;
+      if (status === 404) throw new ComputerError(404, "Computer not found in this workspace.");
+      if (error instanceof Error && (error.name.includes("DaytonaConnectionError") || error.message.includes("ENOTFOUND") || error.message.includes("fetch failed"))) {
+        throw new ComputerError(502, "Could not connect to Daytona. Check your network connection and DNS.");
+      }
+      throw error;
+    }
     if (!Object.entries(this.labels()).every(([key, value]) => sandbox.labels[key] === value)) {
       throw new ComputerError(404, "Computer not found in this workspace.");
     }

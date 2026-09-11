@@ -3,6 +3,8 @@ import { ModelRegistry } from "./agents/models.js";
 import { RunJournal } from "./agents/journal.js";
 import { log } from "./logger.js";
 import "dotenv/config";
+import dns from "node:dns";
+dns.setDefaultResultOrder?.("ipv4first");
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
